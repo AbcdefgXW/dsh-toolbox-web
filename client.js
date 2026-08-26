@@ -156,6 +156,12 @@ window.__ModuleLoader__.load({
         } catch (e) {
           console.error("dsh-toolbox: config.set 同步抛错", key, e);
         }
+        // Tag 收纳开关即时生效：乐观渲染 UI + 更新全局标志并重跑注入（按钮显示/消失 + 恢复展开）
+        if (key === "collapseTagBar") {
+          window.__dshTagBarCfg = !!value;
+          setDoc((prev) => ({ ...(prev || {}), collapseTagBar: !!value }));
+          if (typeof window.__dsdTagBarApply === "function") setTimeout(window.__dsdTagBarApply, 80);
+        }
       };
 
       const retention = doc?.trashRetentionDays ?? 7;
@@ -429,6 +435,15 @@ window.__ModuleLoader__.load({
         style: { padding: "0 4px" },
         children: [
           jsx("div", { style: { fontSize: 13, opacity: 0.7, marginBottom: 8 }, children: "每个功能可独立开关；带 ⚠️ 的切换后需重启生效。" }),
+
+          // ── 分区〇：对话视图标签收纳（置顶 + 分隔） ──
+          sectionTitle("🗂 对话视图标签收纳"),
+          row({
+            key: "collapseTagBar",
+            label: "会话视图标签收纳（默认开）",
+            desc: "在会话头部「导出」旁显示 🗂 按钮：一键收起/展开对话框上方的一排标签（记忆/技能/待办/设置…），状态自动记住。关闭后按钮消失、标签始终展开。",
+          }),
+          jsx("div", { style: { borderTop: "1px solid rgba(128,128,128,0.2)", marginTop: 12, paddingTop: 8 } }),
 
           // ── 分区一：定时心跳（开关 + 全部配置项） ──
           sectionTitle("⏰ 定时心跳"),
@@ -2570,6 +2585,94 @@ window.__ModuleLoader__.load({
         console.warn("dsh-toolbox: 设置导航滚动修复启动失败", e);
       }
 
+      // ── 0.6 对话视图 Tag 收纳（conversation.view 的 tab 栏）：默认折叠、可展开/收起并记住，
+      //      开关 collapseTagBar（默认开）关闭时按钮消失、tab 栏始终展开（不做任何干预） ──
+      // 原理（官方结构）：conversation.view 的 tab 行 = [role="tablist"] > button[role="tab"]（含
+      //      memory-evolve 等插件注册的标签）；"导出"按钮行 = 会话头部操作区（放收纳按钮）。
+      try {
+        const TB_KEY = "dsh-tb-tagbar"; // "1"=折叠（默认） "0"=展开
+        const TB_PREFIX = "dsh-tb";
+        const tagBarEnabled = () => window.__dshTagBarCfg !== false; // 设置开关（默认 true）
+        const knownLabels = ["记忆", "技能", "待办", "设置", "模型", "同步", "书签", "Broadcast", "COI"];
+        const findBar = () => {
+          // 取含 ≥2 个已知标签且 tab 数 ≥3 的 tablist（对话区 conversation.view 的那条）
+          const bars = [...document.querySelectorAll('[role="tablist"]')];
+          for (const b of bars) {
+            const txt = b.textContent || "";
+            if (knownLabels.filter((k) => txt.includes(k)).length >= 2 && b.querySelectorAll('[role="tab"]').length >= 3) return b;
+          }
+          // 退化：tab 数最多的一条
+          let best = null;
+          for (const b of bars) { const n = b.querySelectorAll('[role="tab"]').length; if (n >= 3 && (!best || n > best._n)) { best = b; best._n = n; } }
+          return best;
+        };
+        const ensureBtn = (bar, host) => {
+          if (!host || document.getElementById(TB_PREFIX + "-btn")) return;
+          const btn = document.createElement("button");
+          btn.id = TB_PREFIX + "-btn";
+          btn.type = "button";
+          btn.title = "展开/收起对话视图标签（记忆/技能/待办/设置…）";
+          btn.style.cssText = "margin-left:6px;height:26px;padding:0 10px;border-radius:999px;border:1px solid rgba(128,128,128,0.4);background:transparent;color:inherit;font-size:12px;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;flex:none;";
+          // 注意：官方 header/tablist 会随会话切换重渲染，这里必须实时查找当前 DOM，
+          // 不能闭包绑定创建时的 bar（旧节点脱离文档后操作无效 = “只生效一次/点不动”）
+          const sync = () => {
+            const cur = findBar();
+            const collapsed = localStorage.getItem(TB_KEY) !== "0";
+            btn.textContent = collapsed ? "🗂 展开" : "🗂 收起";
+            btn.setAttribute("aria-pressed", collapsed ? "true" : "false");
+            if (cur) cur.classList.toggle(TB_PREFIX + "-collapsed", collapsed);
+          };
+          btn.addEventListener("click", () => {
+            try {
+              localStorage.setItem(TB_KEY, localStorage.getItem(TB_KEY) === "0" ? "1" : "0");
+              sync();
+            } catch {}
+          });
+          host.appendChild(btn);
+          return btn;
+        };
+        // 样式：折叠时整行隐藏
+        if (!document.getElementById(TB_PREFIX + "-css")) {
+          const st = document.createElement("style");
+          st.id = TB_PREFIX + "-css";
+          st.textContent = `.${TB_PREFIX}-collapsed { display: none !important; }`;
+          document.head.appendChild(st);
+        }
+        const applyTagBar = () => {
+          try {
+            if (!tagBarEnabled()) {
+              // 开关关闭：移除按钮 + 不折叠（恢复 tab 栏原样）
+              const b = document.getElementById(TB_PREFIX + "-btn");
+              if (b) b.remove();
+              const bar = findBar();
+              if (bar) bar.classList.remove(TB_PREFIX + "-collapsed");
+              return;
+            }
+            const bar = findBar();
+            if (!bar) return;
+            // 按钮挂点 = 「导出」按钮所在的操作行
+            const exp = [...document.querySelectorAll("button")].find((x) => (x.textContent || "").includes("导出"));
+            const host = exp ? exp.parentElement : null;
+            const btn = ensureBtn(bar, host);
+            if (btn) {
+              const cur = findBar();
+              const collapsed = localStorage.getItem(TB_KEY) !== "0";
+              btn.textContent = collapsed ? "🗂 展开" : "🗂 收起";
+              btn.setAttribute("aria-pressed", collapsed ? "true" : "false");
+              if (cur) cur.classList.toggle(TB_PREFIX + "-collapsed", collapsed);
+            }
+          } catch {}
+        };
+        window.__dsdTagBarApply = applyTagBar;
+        applyTagBar();
+        setTimeout(applyTagBar, 800);
+        setTimeout(applyTagBar, 2000);
+        const tbObs = new MutationObserver(() => { try { applyTagBar(); } catch {} });
+        tbObs.observe(document.body, { childList: true, subtree: true });
+      } catch (e) {
+        console.warn("dsh-toolbox: Tag 收纳启动失败", e);
+      }
+
       // ── 1. 注册后端端点（生成 ctx.remote.dshToolbox.* 调用方法） ──
       ctx.remote.$mount({ package: "dsh-toolbox", descriptors: DESCRIPTORS }).then(() => {
         // ── 2. 设置分组（设置 → 工具箱）：$mount 完成后再注册，组件能拿到 tools
@@ -2586,6 +2689,8 @@ window.__ModuleLoader__.load({
               window.__dsdCollapse.userOn = d.collapseUserMsg !== false;
               window.__dsdCollapse.userThreshold = Number(d.collapseUserThreshold) > 0 ? Number(d.collapseUserThreshold) : 15;
               window.__dsdCollapse.aiOn = d.collapseAiMsg === true;
+              window.__dshTagBarCfg = d.collapseTagBar !== false;
+              if (typeof window.__dsdTagBarApply === "function") setTimeout(window.__dsdTagBarApply, 50);
               if (typeof window.__dsdScan === "function") setTimeout(window.__dsdScan, 100);
             }).catch(() => {});
           }
