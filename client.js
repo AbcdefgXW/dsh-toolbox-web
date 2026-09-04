@@ -2823,61 +2823,76 @@ window.__ModuleLoader__.load({
         // 明暗主题下与设置按钮一致）；rail（抽屉窄栏）态对齐同列图标按钮：36×36 圆钮。
         // rowFree 三态：行容器共享行（flex:1 1 auto/width:auto 自动排列）；column/wrap
         // 容器（其它插件改纵排）→ flex:0 0 auto + width:100% 占满宽。
-        // 移动端适配：≤560px 让两个按钮上下排列（各占整行）。关键：注入 wrap 的对象必须是
-        //「真正的 footer 行容器」，跳过官方 slot 的 display:contents 包装层（之前直接
-        // parentElement 拿到 contents 层、wrap 无效、而 width:100% 在行内撑爆顶掉别的按钮）。
-        if (!document.getElementById("dsh-toolbox-btn-css")) {
-          const st = document.createElement("style");
-          st.id = "dsh-toolbox-btn-css";
-          // 移动端：按钮 rail 化——36×36 圆钮、隐藏文字，与「设置/导入会话」图标按钮一致；
-          // 宽度/高度/圆角/居中全部覆盖，文字 span 隐藏，只留 🧰 图标
-          st.textContent = "@media (max-width: 560px) { #dsh-toolbox-side-btn { width: 36px !important; height: 36px !important; border-radius: 50% !important; padding: 0 !important; justify-content: center !important; gap: 0 !important; flex: 0 0 auto !important; } #dsh-toolbox-side-btn .dsh-toolbox-btn-text { display: none !important; } }";
-          document.head.appendChild(st);
-        }
-        const realFooterHost = (el) => {
-          let n = el && el.parentElement;
-          while (n && window.getComputedStyle(n).display === "contents") n = n.parentElement;
-          return n;
+        // 按钮完整复刻「导入会话」(dsh-chat-import)——官方槽位传 wide prop
+        //（wide===false=窄栏 rail 态→36×36 圆钮只显图标；否则图标+文字）。
+        // footer 布局经 [data-slot='sidebar.footer.action'] 锚点的父元素判定
+        //（flexWrap/flexDirection），三种模式：wrap 容器→行内独占一行；nowrap+整行占用者
+        //（cordis 徽标/插件市场 launcher）→fixed 浮动独占一行（不会顶掉别人）；nowrap 无
+        // 占用者→row 容器共享行 flex:1 1 auto / column 容器全宽。样式逐项对齐「设置」按钮
+        //（--dsw-alias-label-primary、14px/22px、padding 6px 2px 6px 10px、圆角 12px）。
+        // 不做任何自定义媒体查询——移动端「展开」即宽态=图标+文字，与导入会话完全一致，
+        // 抽屉窄栏/折叠由官方 wide 驱动只显图标。
+        const footerLayout = () => {
+          if (typeof document === "undefined") return { wraps: false, dir: null };
+          const marker = document.querySelector("[data-slot='sidebar.footer.action']");
+          if (!marker || !marker.parentElement) return { wraps: false, dir: null };
+          const cs = getComputedStyle(marker.parentElement);
+          return { wraps: cs.flexWrap === "wrap", dir: cs.flexDirection };
         };
-        const mobileStack = () => {
-          try {
-            const btn = document.getElementById("dsh-toolbox-side-btn");
-            const host = realFooterHost(btn);
-            if (!host) return;
-            const mq = window.matchMedia("(max-width: 560px)");
-            const apply = () => { try { host.style.flexWrap = mq.matches ? "wrap" : ""; } catch {} };
-            apply();
-            if (typeof mq.addEventListener === "function") mq.addEventListener("change", apply);
-          } catch {}
+        const footerOccupantRect = () => {
+          if (typeof document === "undefined") return null;
+          let best = null;
+          for (const sel of ["[data-cordis-badge]", ".dshMarketLauncher"]) {
+            const el = document.querySelector(sel);
+            if (!el) continue;
+            const cs = getComputedStyle(el);
+            if (cs.display === "none" || cs.visibility === "hidden" || cs.opacity === "0") continue;
+            const r = el.getBoundingClientRect();
+            if (r.width <= 0 || r.height <= 0) continue;
+            if (!best || r.top < best.top) best = { top: r.top, left: r.left, width: r.width, height: r.height };
+          }
+          return best;
         };
-        setTimeout(mobileStack, 800);
-        setTimeout(mobileStack, 2500);
-        const ToolboxButton = (p) => {
-          const rail = !!(p && p.rail);
+        const ToolboxButton = ({ wide }) => {
+          const rail = wide === false;
           const open = usePanelOpen();
-          // 行容器检测（对齐 chat-import layout 判定）：父容器 row 方向且未 wrap → 行内共享
-          const [rowFree, setRowFree] = React.useState(true);
+          const [layout, setLayout] = React.useState(() => footerLayout());
+          const [anchor, setAnchor] = React.useState(() => footerOccupantRect());
           React.useEffect(() => {
-            const probe = () => {
-              try {
-                const el = document.getElementById("dsh-toolbox-side-btn");
-                const host = realFooterHost(el);
-                if (!host) return;
-                const cs = window.getComputedStyle(host);
-                setRowFree(cs.flexDirection.startsWith("row") && cs.flexWrap !== "wrap");
-              } catch {}
+            const check = () => {
+              setLayout((prev) => {
+                const next = footerLayout();
+                return prev.wraps === next.wraps && prev.dir === next.dir ? prev : next;
+              });
+              const next = footerOccupantRect();
+              setAnchor((prev) => {
+                if (!prev && !next) return prev;
+                if (prev && next && prev.top === next.top && prev.left === next.left
+                  && prev.width === next.width && prev.height === next.height) return prev;
+                return next;
+              });
             };
-            probe();
-            const t = setTimeout(probe, 300);
-            const el = document.getElementById("dsh-toolbox-side-btn");
-            const host = realFooterHost(el);
-            let ro;
-            if (host) {
-              ro = new ResizeObserver(probe);
-              ro.observe(host);
-            }
-            return () => { if (ro) ro.disconnect(); clearTimeout(t); };
+            check();
+            const mo = new MutationObserver(check);
+            mo.observe(document.documentElement, {
+              childList: true, subtree: true, attributes: true,
+              attributeFilter: ["data-cordis-badge", "style", "class"],
+            });
+            window.addEventListener("resize", check);
+            return () => { mo.disconnect(); window.removeEventListener("resize", check); };
           }, []);
+          // 窄栏 rail 态：footer 容器转纵向单列（同槽按钮——导入会话/设置——全部纵向
+          // 堆叠成图标列，不横排并挤）；展开态清空恢复官方默认布局。
+          React.useEffect(() => {
+            try {
+              const marker = document.querySelector("[data-slot='sidebar.footer.action']");
+              const host = marker && marker.parentElement;
+              if (!host) return;
+              host.style.flexDirection = rail ? "column" : "";
+            } catch {}
+          }, [rail]);
+          const floating = !layout.wraps && !!anchor;
+          const rowFree = !layout.wraps && !!layout.dir && layout.dir.startsWith("row");
           const baseStyle = {
             boxSizing: "border-box", display: "flex", alignItems: "center",
             justifyContent: rail ? "center" : undefined,
@@ -2887,14 +2902,21 @@ window.__ModuleLoader__.load({
             borderRadius: rail ? "50%" : "12px", padding: rail ? "0" : "6px 2px 6px 10px",
             fontSize: "14px", lineHeight: "22px", fontWeight: 400, cursor: "pointer",
           };
-          const style = rail
-            ? { ...baseStyle, flex: "0 0 auto", width: 36, height: 36, whiteSpace: "nowrap" }
-            : rowFree
-              ? { ...baseStyle, flex: "1 1 auto", width: "auto", minWidth: 0, whiteSpace: "nowrap" }
-              : { ...baseStyle, flex: "0 0 auto", width: "100%", whiteSpace: "nowrap" };
+          const style = floating
+            ? {
+              ...baseStyle, position: "fixed",
+              left: Math.round(anchor.left) + "px",
+              bottom: Math.round(window.innerHeight - anchor.top + 6) + "px",
+              zIndex: 1,
+              width: rail ? "36px" : Math.round(anchor.width) + "px",
+              height: rail ? "36px" : "34px",
+              whiteSpace: "nowrap",
+            }
+            : rail || !rowFree
+              ? { ...baseStyle, flex: "0 0 auto", width: rail ? "36px" : "100%", whiteSpace: "nowrap", height: rail ? "36px" : undefined }
+              : { ...baseStyle, flex: "1 1 auto", width: "auto", minWidth: 0, whiteSpace: "nowrap" };
           const hoverBg = "var(--dsw-alias-interactive-bg-hover)";
           return jsx("button", {
-            id: "dsh-toolbox-side-btn",
             type: "button",
             style,
             title: "工具箱：会话管理 / 回收站 / 子目录 / 搜索",
@@ -2904,7 +2926,7 @@ window.__ModuleLoader__.load({
             onMouseLeave: (e) => { e.currentTarget.style.background = "transparent"; },
             children: [
               jsx("span", { style: { flex: "none", fontSize: 16, lineHeight: 1 }, children: "🧰" }),
-              !rail && jsx("span", { className: "dsh-toolbox-btn-text", style: { flex: "0 1 auto", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, children: "工具箱" }),
+              !rail && jsx("span", { style: { flex: "0 1 auto", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, children: "工具箱" }),
             ],
           });
         };
