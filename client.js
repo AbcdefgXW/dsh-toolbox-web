@@ -2650,9 +2650,11 @@ window.__ModuleLoader__.load({
             }
             const bar = findBar();
             if (!bar) return;
-            // 按钮挂点 = 「导出」按钮所在的操作行
+            // 按钮挂点：优先「导出」按钮父行；dsh-pocket 会把「导出」挪出会话头部（PC/移动均可能）→
+            // 找不到时直接挂到标签栏行内（tablist 尾部），与导出按钮彻底解耦
             const exp = [...document.querySelectorAll("button")].find((x) => (x.textContent || "").includes("导出"));
-            const host = exp ? exp.parentElement : null;
+            let host = exp ? exp.parentElement : null;
+            if (!host) host = bar;
             const btn = ensureBtn(bar, host);
             if (btn) {
               const cur = findBar();
@@ -2815,28 +2817,95 @@ window.__ModuleLoader__.load({
           return open;
         };
 
-        // 移动端适配：窄屏（≤720px）隐藏按钮文字，只显示 🧰 图标（防竖排/遮挡）
+        // 按钮完全对齐「导入会话」(dsh-chat-import) 的实现——其注释明确：视觉逐项对齐侧边栏
+        //「设置」按钮（行高 22px、padding 6px 2px 6px 10px、gap 8px、圆角 12px、16×16 图标、
+        // 颜色/悬停用侧边栏同一 CSS 变量 --dsw-alias-label-primary / interactive-bg-hover，
+        // 明暗主题下与设置按钮一致）；rail（抽屉窄栏）态对齐同列图标按钮：36×36 圆钮。
+        // rowFree 三态：行容器共享行（flex:1 1 auto/width:auto 自动排列）；column/wrap
+        // 容器（其它插件改纵排）→ flex:0 0 auto + width:100% 占满宽。
+        // 移动端适配：≤560px 让两个按钮上下排列（各占整行）。关键：注入 wrap 的对象必须是
+        //「真正的 footer 行容器」，跳过官方 slot 的 display:contents 包装层（之前直接
+        // parentElement 拿到 contents 层、wrap 无效、而 width:100% 在行内撑爆顶掉别的按钮）。
         if (!document.getElementById("dsh-toolbox-btn-css")) {
           const st = document.createElement("style");
           st.id = "dsh-toolbox-btn-css";
-          st.textContent = "@media (max-width: 720px) { .dsh-toolbox-btn-text { display: none !important; } }";
+          // 移动端：按钮 rail 化——36×36 圆钮、隐藏文字，与「设置/导入会话」图标按钮一致；
+          // 宽度/高度/圆角/居中全部覆盖，文字 span 隐藏，只留 🧰 图标
+          st.textContent = "@media (max-width: 560px) { #dsh-toolbox-side-btn { width: 36px !important; height: 36px !important; border-radius: 50% !important; padding: 0 !important; justify-content: center !important; gap: 0 !important; flex: 0 0 auto !important; } #dsh-toolbox-side-btn .dsh-toolbox-btn-text { display: none !important; } }";
           document.head.appendChild(st);
         }
-
-        const ToolboxButton = () => {
+        const realFooterHost = (el) => {
+          let n = el && el.parentElement;
+          while (n && window.getComputedStyle(n).display === "contents") n = n.parentElement;
+          return n;
+        };
+        const mobileStack = () => {
+          try {
+            const btn = document.getElementById("dsh-toolbox-side-btn");
+            const host = realFooterHost(btn);
+            if (!host) return;
+            const mq = window.matchMedia("(max-width: 560px)");
+            const apply = () => { try { host.style.flexWrap = mq.matches ? "wrap" : ""; } catch {} };
+            apply();
+            if (typeof mq.addEventListener === "function") mq.addEventListener("change", apply);
+          } catch {}
+        };
+        setTimeout(mobileStack, 800);
+        setTimeout(mobileStack, 2500);
+        const ToolboxButton = (p) => {
+          const rail = !!(p && p.rail);
           const open = usePanelOpen();
-          return jsx(P.Button, {
-            size: "sm",
-            variant: "outline",
+          // 行容器检测（对齐 chat-import layout 判定）：父容器 row 方向且未 wrap → 行内共享
+          const [rowFree, setRowFree] = React.useState(true);
+          React.useEffect(() => {
+            const probe = () => {
+              try {
+                const el = document.getElementById("dsh-toolbox-side-btn");
+                const host = realFooterHost(el);
+                if (!host) return;
+                const cs = window.getComputedStyle(host);
+                setRowFree(cs.flexDirection.startsWith("row") && cs.flexWrap !== "wrap");
+              } catch {}
+            };
+            probe();
+            const t = setTimeout(probe, 300);
+            const el = document.getElementById("dsh-toolbox-side-btn");
+            const host = realFooterHost(el);
+            let ro;
+            if (host) {
+              ro = new ResizeObserver(probe);
+              ro.observe(host);
+            }
+            return () => { if (ro) ro.disconnect(); clearTimeout(t); };
+          }, []);
+          const baseStyle = {
+            boxSizing: "border-box", display: "flex", alignItems: "center",
+            justifyContent: rail ? "center" : undefined,
+            gap: rail ? "0" : "8px",
+            background: "transparent", border: "none",
+            color: "var(--dsw-alias-label-primary)",
+            borderRadius: rail ? "50%" : "12px", padding: rail ? "0" : "6px 2px 6px 10px",
+            fontSize: "14px", lineHeight: "22px", fontWeight: 400, cursor: "pointer",
+          };
+          const style = rail
+            ? { ...baseStyle, flex: "0 0 auto", width: 36, height: 36, whiteSpace: "nowrap" }
+            : rowFree
+              ? { ...baseStyle, flex: "1 1 auto", width: "auto", minWidth: 0, whiteSpace: "nowrap" }
+              : { ...baseStyle, flex: "0 0 auto", width: "100%", whiteSpace: "nowrap" };
+          const hoverBg = "var(--dsw-alias-interactive-bg-hover)";
+          return jsx("button", {
+            id: "dsh-toolbox-side-btn",
+            type: "button",
+            style,
             title: "工具箱：会话管理 / 回收站 / 子目录 / 搜索",
+            "aria-label": "工具箱",
             onClick: () => setPanelOpen(!open),
-            children: jsx("span", {
-              style: { display: "inline-flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" },
-              children: [
-                jsx("span", { children: "🧰" }),
-                jsx("span", { className: "dsh-toolbox-btn-text", children: "工具箱" }),
-              ],
-            }),
+            onMouseEnter: (e) => { e.currentTarget.style.background = hoverBg; },
+            onMouseLeave: (e) => { e.currentTarget.style.background = "transparent"; },
+            children: [
+              jsx("span", { style: { flex: "none", fontSize: 16, lineHeight: 1 }, children: "🧰" }),
+              !rail && jsx("span", { className: "dsh-toolbox-btn-text", style: { flex: "0 1 auto", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, children: "工具箱" }),
+            ],
           });
         };
         const ToolboxPanelHost = (slotProps) => {
