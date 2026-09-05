@@ -1119,8 +1119,8 @@ window.__ModuleLoader__.load({
               portal: true,
               open: moveFor === sess.sessionId,
               anchor: jsx(P.Button, {
-                size: "sm", disabled: busy || isCurrent || moveFor !== null, title: isCurrent ? "当前会话不可移动" : undefined,
-                onClick: () => setMoveFor(moveFor === sess.sessionId ? null : sess.sessionId),
+                size: "sm", disabled: true,
+                title: "已禁用：当前 DSH（0.1.2-rc.1）不支持跨工作区移动会话（常驻激活机制会导致会话消失）。跨区移动请使用 dsh-session-xc 会话增强插件。",
                 children: "移动▾",
               }),
               items: moveTargets,
@@ -2023,7 +2023,7 @@ window.__ModuleLoader__.load({
               jsx(P.Menu, {
                 portal: true,
                 open: moveMenuFor === d.name,
-                anchor: jsx(P.Button, { size: "sm", variant: "outline", disabled: !!menuFor, onClick: () => setMoveMenuFor(moveMenuFor === d.name ? null : d.name), children: "移动会话▾" }),
+                anchor: jsx(P.Button, { size: "sm", variant: "outline", disabled: true, title: "已禁用：当前 DSH（0.1.2-rc.1）不支持跨工作区移动会话（常驻激活机制会导致会话消失）。跨区移动请使用 dsh-session-xc 会话增强插件。", children: "移动会话▾" }),
                 items: moveTargets,
                 onSelect: (id) => {
                   setMoveMenuFor(null);

@@ -304,17 +304,9 @@ class ToolsApi extends Service {
   }
 
   async "sessions.move"(targetCwd, sessionId) {
-    const all = await listAllSessions();
-    const s = all.find((x) => x.sessionId === sessionId);
-    if (!s) return { ok: false, error: "会话不存在" };
-    const result = await resetSessionCwd(s.path, targetCwd);
-    if (!result.ok) return result;
-    try {
-      await syncWorkspaceAfterMove(this.ctx, sessionId, targetCwd);
-    } catch (err) {
-      logErr("sessions.move.sync", err);
-    }
-    return { ...result, needRestart: true };
+    // 已禁用（v0.1.20 兼容修复）：DSH 0.1.2-rc.1 中 GUI 打开过的会话由 Host 常驻激活，
+    // 跨工作区移动会与 attach 校验冲突导致会话从官方列表消失。跨区移动请使用 dsh-session-xc。
+    return { ok: false, error: "已禁用：当前 DSH 不支持跨工作区移动会话（常驻激活会导致会话丢失）。请使用 dsh-session-xc 会话增强插件。" };
   }
 
   async "sessions.detach"(sessionId) {
@@ -358,15 +350,8 @@ class ToolsApi extends Service {
   }
 
   async "workspace.moveSessions"(name, targetCwd) {
-    const prefix = path.join(WORKSPACE_ROOT, name);
-    const all = await listAllSessions();
-    let moved = 0;
-    for (const s of all) {
-      if (!(s.cwd === prefix || s.cwd.startsWith(prefix + path.sep))) continue;
-      const rr = await resetSessionCwd(s.path, targetCwd);
-      if (rr.ok) moved += 1;
-    }
-    return { ok: true, moved };
+    // 已禁用（v0.1.20 兼容修复）：与 sessions.move 同因（DSH 0.1.2-rc.1 常驻激活冲突）。
+    return { ok: false, error: "已禁用：当前 DSH 不支持跨工作区移动会话（常驻激活会导致会话丢失）。请使用 dsh-session-xc 会话增强插件。" };
   }
 
   async "workspace.delete"(name, sessionsAction) {
