@@ -250,6 +250,8 @@ class ToolsApi extends Service {
     const all = await listAllSessions();
     const empty = [];
     for (const s of all) {
+      // 读不到 header（如仅存新代、解析失败）→ 无法判定内容，跳过不删（防误删有内容会话）
+      if (!s.header) continue;
       // 子代理会话跟随父会话管理，不作为独立条目清除
       if (s.header?.parentSession) continue;
       const stats = readSessionStatsLite(s.path, s.sessionId);
@@ -679,7 +681,8 @@ class ToolsApi extends Service {
       try {
         const ids = reg.requireState().archivedSessionIds || [];
         for (const id of ids) {
-          const s = all.find((x) => x.sessionId === id);
+          // 官方注册表存的是会话真实 id；个别会话列表项以目录名兜底（仅存新代时）
+          const s = all.find((x) => x.sessionId === id || x.sessionDir === id);
           if (s) {
             const stats = readSessionStatsLite(s.path, s.sessionId);
             archived.push({
@@ -701,7 +704,7 @@ class ToolsApi extends Service {
   /** 归档 Tab 的删除：进回收站 + 从归档列表移除（不留残影）。 */
   async "archived.delete"(sessionId) {
     const all = await listAllSessions();
-    const s = all.find((x) => x.sessionId === sessionId);
+    const s = all.find((x) => x.sessionId === sessionId || x.sessionDir === sessionId);
     if (!s) return { ok: false, error: "会话不存在" };
     try {
       trashItem({ type: "session", name: s.sessionId, sourcePath: s.path, meta: { cwd: s.cwd } });
