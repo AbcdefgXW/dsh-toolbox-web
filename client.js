@@ -2569,71 +2569,18 @@ window.__ModuleLoader__.load({
           }
         };
         window.__dsFixSettingsNav = fixSettingsNav;
-
-        // ── 0.5a 设置页窄屏布局：移动端把左侧 188px 分区导航折叠为顶部横向条（可逆） ──
-        // 官方设置 UI 无任何响应式：手机上 nav 固定 188px 会挤掉大半内容区（插件设置项被压成窄柱）。
-        // 窄屏（< 720px）→ panel 转 column、navList 转横向滚动；回到宽屏 → 全部还原。
-        const applyNarrowSettings = () => {
-          const narrow = typeof window !== "undefined" && window.innerWidth < 720;
-          for (const nav of document.querySelectorAll('nav[class$="_nav"]')) {
-            const panel = nav.closest('[class$="_panel"]');
-            if (!panel) continue; // 非设置面板内的 nav 不动
-            const navList = nav.querySelector('[class$="_navList"]');
-            if (!navList) continue;
-            if (narrow) {
-              if (panel.dataset.dshNarrow === "1") continue;
-              panel.dataset.dshNarrow = "1";
-              panel.style.flexDirection = "column";
-              nav.style.width = "auto";
-              nav.style.minWidth = "0";
-              nav.style.maxWidth = "100%";
-              nav.style.borderRight = "none";
-              nav.style.overflowX = "auto";
-              nav.style.overflowY = "hidden";
-              nav.style.paddingBottom = "6px";
-              navList.style.flexDirection = "row";
-              navList.style.flexWrap = "nowrap";
-              navList.style.gap = "6px";
-              navList.style.width = "max-content";
-            } else if (panel.dataset.dshNarrow === "1") {
-              panel.dataset.dshNarrow = "";
-              panel.style.flexDirection = "";
-              nav.style.width = "";
-              nav.style.minWidth = "";
-              nav.style.maxWidth = "";
-              nav.style.borderRight = "";
-              nav.style.overflowX = "";
-              nav.style.overflowY = "";
-              nav.style.paddingBottom = "";
-              navList.style.flexDirection = "";
-              navList.style.flexWrap = "";
-              navList.style.gap = "";
-              navList.style.width = "";
-            }
-          }
-        };
-        window.__dsNarrowSettings = applyNarrowSettings;
-        try {
-          window.addEventListener("resize", () => {
-            if (window.__dsNarrowTimer) clearTimeout(window.__dsNarrowTimer);
-            window.__dsNarrowTimer = setTimeout(() => { try { applyNarrowSettings(); } catch {} }, 200);
-          });
-        } catch {}
-
         let navTimer = null;
         const navObserver = new MutationObserver(() => {
           if (navTimer) return;
           navTimer = setTimeout(() => {
             navTimer = null;
             try { fixSettingsNav(); } catch {}
-            try { applyNarrowSettings(); } catch {}
           }, 300);
         });
         navObserver.observe(document.body, { childList: true, subtree: true });
         // 首查 + 兜底（设置面板可能在点击后才挂载，observer 会兜住；延迟再补一次）
         try { fixSettingsNav(); } catch {}
-        try { applyNarrowSettings(); } catch {}
-        setTimeout(() => { try { fixSettingsNav(); } catch {} try { applyNarrowSettings(); } catch {} }, 1200);
+        setTimeout(() => { try { fixSettingsNav(); } catch {} }, 1200);
       } catch (e) {
         console.warn("dsh-toolbox: 设置导航滚动修复启动失败", e);
       }
