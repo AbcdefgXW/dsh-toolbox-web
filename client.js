@@ -449,9 +449,9 @@ window.__ModuleLoader__.load({
           sectionTitle("⏰ 定时心跳"),
           row(SWITCH_HEART),
           jsx("div", {
-            style: { display: "flex", alignItems: "center", padding: "8px 0", gap: 8 },
+            style: { display: "flex", alignItems: "center", padding: "8px 0", gap: 8, flexWrap: "wrap" },
             children: [
-              jsx("label", { style: { flex: 1 }, children: "心跳间隔（分钟，最小 5，默认 60）" }),
+              jsx("label", { style: { flex: "1 1 160px", minWidth: 0 }, children: "心跳间隔（分钟，最小 5，默认 60）" }),
               jsx("span", { style: { fontSize: 11, opacity: 0.55, whiteSpace: "nowrap" }, children: fmtCountdown(nextTimes.interval) ? "⏱ 距下次 " + fmtCountdown(nextTimes.interval) : "" }),
               jsx("input", {
                 type: "number",
@@ -463,9 +463,9 @@ window.__ModuleLoader__.load({
             ],
           }),
           jsx("div", {
-            style: { display: "flex", alignItems: "center", padding: "8px 0", gap: 8 },
+            style: { display: "flex", alignItems: "center", padding: "8px 0", gap: 8, flexWrap: "wrap" },
             children: [
-              jsx("label", { style: { flex: 1 }, children: "心跳提示语（{time} 自动替换为当前时间）" }),
+              jsx("label", { style: { flex: "1 1 160px", minWidth: 0 }, children: "心跳提示语（{time} 自动替换为当前时间）" }),
               jsx(P.Button, {
                 size: "sm", variant: "outline",
                 onClick: () => { if (window.confirm("恢复默认心跳提示语？将覆盖当前内容")) setSchedulePrompt(DEFAULT_HEART_PROMPT); },
@@ -544,9 +544,9 @@ window.__ModuleLoader__.load({
           }),
           jsx("div", { style: { fontSize: 12, opacity: 0.6, marginBottom: 8 }, children: "定点定时注入到哪：与间隔心跳可不同（如：间隔心跳主工作区巡检 + 每天 09:00 推送微信晨报）。选 📱 微信/QQ/飞书 = 结果定时推送到手机（需安装 dsh-msg-hub插件，命令：dsh plugin --profile web add dsh-msg-hub）。" }),
           jsx("div", {
-            style: { display: "flex", alignItems: "center", padding: "8px 0", gap: 8 },
+            style: { display: "flex", alignItems: "center", padding: "8px 0", gap: 8, flexWrap: "wrap" },
             children: [
-              jsx("label", { style: { flex: 1 }, children: "定点定时提示语（与间隔心跳独立）" }),
+              jsx("label", { style: { flex: "1 1 160px", minWidth: 0 }, children: "定点定时提示语（与间隔心跳独立）" }),
               jsx(P.Button, {
                 size: "sm", variant: "outline",
                 onClick: () => { if (window.confirm("恢复默认定点定时提示语？将覆盖当前内容")) setScheduleCronPrompt(DEFAULT_CRON_PROMPT); },
@@ -564,7 +564,7 @@ window.__ModuleLoader__.load({
 
           jsx("div", { style: { borderTop: "1px solid rgba(128,128,128,0.2)", marginTop: 12, paddingTop: 10 } }),
           jsx("div", {
-            style: { display: "flex", alignItems: "center", padding: "8px 0", gap: 8 },
+            style: { display: "flex", alignItems: "center", padding: "8px 0", gap: 8, flexWrap: "wrap" },
             children: [
               jsx("div", { style: { flex: 1, minWidth: 0 }, children: [
                 jsx("div", { style: { fontWeight: 500 }, children: "微信消息分段上限" }),
@@ -585,9 +585,9 @@ window.__ModuleLoader__.load({
           sectionTitle("🔧 功能开关"),
           ...SWITCHES.map(row),
           jsx("div", {
-            style: { display: "flex", alignItems: "center", padding: "8px 0", gap: 8 },
+            style: { display: "flex", alignItems: "center", padding: "8px 0", gap: 8, flexWrap: "wrap" },
             children: [
-              jsx("label", { style: { flex: 1 }, children: "折叠行数阈值（用户/AI 消息超过该行数即折叠，默认 15，0 = 不折叠）" }),
+              jsx("label", { style: { flex: "1 1 160px", minWidth: 0 }, children: "折叠行数阈值（用户/AI 消息超过该行数即折叠，默认 15，0 = 不折叠）" }),
               jsx("input", {
                 type: "number",
                 min: 0,
@@ -601,9 +601,9 @@ window.__ModuleLoader__.load({
           sectionTitle("🔍 搜索"),
           jsx("div", { style: { fontSize: 12, opacity: 0.75, marginBottom: 8, color: "#e5a54b" }, children: "⚠️ 搜索默认全部关闭（省内存）。开启后比较占内存：自研/语义搜索需解压会话；DSH 的内存释放机制是 Node 垃圾回收，大对象释放后堆水位不会立即下降，必须重启 DSH 服务才会彻底释放。官方搜索（SQLite 索引）不读会话文件，占用最低，建议优先使用。" }),
           jsx("div", {
-            style: { display: "flex", alignItems: "center", padding: "8px 0", gap: 8 },
+            style: { display: "flex", alignItems: "center", padding: "8px 0", gap: 8, flexWrap: "wrap" },
             children: [
-              jsx("label", { style: { flex: 1 }, children: "搜索缓存秒数（关键词/语义同词缓存，0 = 不缓存，默认 120）" }),
+              jsx("label", { style: { flex: "1 1 160px", minWidth: 0 }, children: "搜索缓存秒数（关键词/语义同词缓存，0 = 不缓存，默认 120）" }),
               jsx("input", {
                 type: "number",
                 min: 0,
@@ -2569,18 +2569,71 @@ window.__ModuleLoader__.load({
           }
         };
         window.__dsFixSettingsNav = fixSettingsNav;
+
+        // ── 0.5a 设置页窄屏布局：移动端把左侧 188px 分区导航折叠为顶部横向条（可逆） ──
+        // 官方设置 UI 无任何响应式：手机上 nav 固定 188px 会挤掉大半内容区（插件设置项被压成窄柱）。
+        // 窄屏（< 720px）→ panel 转 column、navList 转横向滚动；回到宽屏 → 全部还原。
+        const applyNarrowSettings = () => {
+          const narrow = typeof window !== "undefined" && window.innerWidth < 720;
+          for (const nav of document.querySelectorAll('nav[class$="_nav"]')) {
+            const panel = nav.closest('[class$="_panel"]');
+            if (!panel) continue; // 非设置面板内的 nav 不动
+            const navList = nav.querySelector('[class$="_navList"]');
+            if (!navList) continue;
+            if (narrow) {
+              if (panel.dataset.dshNarrow === "1") continue;
+              panel.dataset.dshNarrow = "1";
+              panel.style.flexDirection = "column";
+              nav.style.width = "auto";
+              nav.style.minWidth = "0";
+              nav.style.maxWidth = "100%";
+              nav.style.borderRight = "none";
+              nav.style.overflowX = "auto";
+              nav.style.overflowY = "hidden";
+              nav.style.paddingBottom = "6px";
+              navList.style.flexDirection = "row";
+              navList.style.flexWrap = "nowrap";
+              navList.style.gap = "6px";
+              navList.style.width = "max-content";
+            } else if (panel.dataset.dshNarrow === "1") {
+              panel.dataset.dshNarrow = "";
+              panel.style.flexDirection = "";
+              nav.style.width = "";
+              nav.style.minWidth = "";
+              nav.style.maxWidth = "";
+              nav.style.borderRight = "";
+              nav.style.overflowX = "";
+              nav.style.overflowY = "";
+              nav.style.paddingBottom = "";
+              navList.style.flexDirection = "";
+              navList.style.flexWrap = "";
+              navList.style.gap = "";
+              navList.style.width = "";
+            }
+          }
+        };
+        window.__dsNarrowSettings = applyNarrowSettings;
+        try {
+          window.addEventListener("resize", () => {
+            if (window.__dsNarrowTimer) clearTimeout(window.__dsNarrowTimer);
+            window.__dsNarrowTimer = setTimeout(() => { try { applyNarrowSettings(); } catch {} }, 200);
+          });
+        } catch {}
+
         let navTimer = null;
         const navObserver = new MutationObserver(() => {
           if (navTimer) return;
           navTimer = setTimeout(() => {
             navTimer = null;
             try { fixSettingsNav(); } catch {}
+            try { applyNarrowSettings(); } catch {}
           }, 300);
         });
         navObserver.observe(document.body, { childList: true, subtree: true });
         // 首查 + 兜底（设置面板可能在点击后才挂载，observer 会兜住；延迟再补一次）
         try { fixSettingsNav(); } catch {}
-        setTimeout(() => { try { fixSettingsNav(); } catch {} }, 1200);
+        try { applyNarrowSettings(); } catch {}
+        setTimeout(() => { try { fixSettingsNav(); } catch {} try { applyNarrowSettings(); } catch {} }, 1200);
       } catch (e) {
         console.warn("dsh-toolbox: 设置导航滚动修复启动失败", e);
       }
