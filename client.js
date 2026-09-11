@@ -13,6 +13,14 @@ window.__ModuleLoader__.load({
   id: "dsh-toolbox-web",
   factory: (require) => {
     const { jsx } = require("react/jsx-runtime");
+    // react-dom 用于把全屏浮层挂到 document.body（官方 chat/attachment 同款做法）：
+    // 挂在插件槽位内会被祖先容器（尺寸/transform/contain 等）限制住，导致弹窗只有侧栏那么宽。
+    let createPortal = null;
+    try { ({ createPortal } = require("react-dom")); } catch (e) { console.warn("dsh-toolbox: react-dom 不可用，浮层退回原位渲染", e); }
+
+    /** 全屏浮层统一挂到 body；react-dom 不可用时退回原位渲染（保证功能不残废）。 */
+    const inBody = (node) => (typeof createPortal === "function" && typeof document !== "undefined" && document.body)
+      ? createPortal(node, document.body) : node;
     const React = require("react");
     const P = require("@deepseek-ai/dsh-client-ui-primitives");
 
@@ -428,9 +436,9 @@ window.__ModuleLoader__.load({
       ];
 
       // 设置行样式：窄容器（<420px）纵向堆叠——标题一行、控件一行，避免文字被压成竖柱。
-      const rowStyle = () => narrow
-        ? { display: "flex", flexDirection: "column", alignItems: "stretch", gap: 6, padding: "8px 0" }
-        : { display: "flex", alignItems: "center", gap: 8, padding: "8px 0", flexWrap: "wrap" };
+      const rowStyle = (extra) => narrow
+        ? { display: "flex", flexDirection: "column", alignItems: "stretch", gap: 6, padding: "8px 0", ...extra }
+        : { display: "flex", alignItems: "center", gap: 8, padding: "8px 0", flexWrap: "wrap", ...extra };
 
       const row = (sw) => {
         const value = doc?.[sw.key] ?? (sw.default !== false);
@@ -509,7 +517,7 @@ window.__ModuleLoader__.load({
           jsx("div", {
             style: rowStyle(),
             children: [
-              jsx("label", { style: { flex: "none" }, children: "心跳目标会话" }),
+              jsx("label", { style: narrow ? { flex: "1 1 100%" } : { flex: "none" }, children: "心跳目标会话" }),
               jsx("select", {
                 value: scheduleTarget,
                 onChange: (e) => setScheduleTarget(e.target.value),
@@ -522,7 +530,7 @@ window.__ModuleLoader__.load({
           jsx("div", {
             style: rowStyle(),
             children: [
-              jsx("label", { style: { flex: "none" }, children: "定点定时" }),
+              jsx("label", { style: narrow ? { flex: "1 1 100%" } : { flex: "none" }, children: "定点定时" }),
               jsx("span", { style: { fontSize: 11, opacity: 0.55, whiteSpace: "nowrap" }, children: fmtCountdown(nextTimes.cron) ? "⏱ 距下次 " + fmtCountdown(nextTimes.cron) : "" }),
               jsx("select", {
                 value: cron.type,
@@ -559,7 +567,7 @@ window.__ModuleLoader__.load({
           jsx("div", {
             style: rowStyle(),
             children: [
-              jsx("label", { style: { flex: "none" }, children: "定点定时目标会话" }),
+              jsx("label", { style: narrow ? { flex: "1 1 100%" } : { flex: "none" }, children: "定点定时目标会话" }),
               jsx("select", {
                 value: scheduleCronTarget,
                 onChange: (e) => setScheduleCronTarget(e.target.value),
@@ -646,68 +654,68 @@ window.__ModuleLoader__.load({
           row({ key: "embedEnabled", label: "语义搜索开关", desc: "默认关。开启后搜索页才可切换到「🧠 语义」模式；⚠️ 语义搜索需解压命中会话，比较占内存，使用后必须重启 DSH 服务才会释放", default: false }),
           jsx("div", { style: { fontSize: 12, opacity: 0.7, marginBottom: 8 }, children: "搜索 Tab 勾选「🧠 语义」即按语义匹配；无 Key / API 失败 / 匹配度过低自动降级为关键词搜索。配置改动即自动保存，Key 仅存本地。" }),
           jsx("div", {
-            style: { display: "flex", alignItems: "center", padding: "8px 0", gap: 8 },
+            style: rowStyle(),
             children: [
-              jsx("label", { style: { flex: 1 }, children: "语义相关度阈值（0-100，低于该值视为噪声并降级关键词，默认 80）" }),
+              jsx("label", { style: narrow ? { flex: "0 0 auto" } : { flex: 1, minWidth: 0 }, children: "语义相关度阈值（0-100，低于该值视为噪声并降级关键词，默认 80）" }),
               jsx("input", {
                 type: "number",
                 min: 0,
                 max: 100,
                 value: embedMinScore,
                 onChange: (e) => setEmbedMinScore(e.target.value),
-                style: { width: 72 },
+                style: narrow ? { width: "100%" } : { width: 72 },
               }),
             ],
           }),
           jsx("div", {
-            style: { display: "flex", alignItems: "center", padding: "8px 0", gap: 8 },
+            style: rowStyle(),
             children: [
-              jsx("label", { style: { flex: 1 }, children: "语义显示条数（只显示相关度前 N 条，0 = 不限制，默认 20）" }),
+              jsx("label", { style: narrow ? { flex: "0 0 auto" } : { flex: 1, minWidth: 0 }, children: "语义显示条数（只显示相关度前 N 条，0 = 不限制，默认 20）" }),
               jsx("input", {
                 type: "number",
                 min: 0,
                 value: embedTopN,
                 onChange: (e) => setEmbedTopN(e.target.value),
-                style: { width: 72 },
+                style: narrow ? { width: "100%" } : { width: 72 },
               }),
             ],
           }),
           jsx("div", {
-            style: { display: "flex", alignItems: "center", padding: "8px 0", gap: 8 },
+            style: rowStyle(),
             children: [
-              jsx("label", { style: { flex: 1 }, children: "Embedding API 地址" }),
+              jsx("label", { style: narrow ? { flex: "0 0 auto" } : { flex: 1, minWidth: 0 }, children: "Embedding API 地址" }),
               jsx("input", {
                 type: "text",
                 value: embedBaseUrl,
                 onChange: (e) => setEmbedField("embedBaseUrl", e.target.value),
                 placeholder: "https://api.siliconflow.cn/v1",
-                style: { width: 260, fontSize: 12, padding: "3px 6px", borderRadius: 6, border: "1px solid rgba(128,128,128,0.35)", background: "rgba(0,0,0,0.25)", color: "inherit" },
+                style: { width: narrow ? "100%" : 260, fontSize: 12, padding: "3px 6px", borderRadius: 6, border: "1px solid rgba(128,128,128,0.35)", background: "rgba(0,0,0,0.25)", color: "inherit" },
               }),
             ],
           }),
           jsx("div", {
-            style: { display: "flex", alignItems: "center", padding: "8px 0", gap: 8 },
+            style: rowStyle(),
             children: [
-              jsx("label", { style: { flex: 1 }, children: "Embedding API Key" }),
+              jsx("label", { style: narrow ? { flex: "0 0 auto" } : { flex: 1, minWidth: 0 }, children: "Embedding API Key" }),
               jsx("input", {
                 type: "password",
                 value: embedApiKey,
                 onChange: (e) => setEmbedField("embedApiKey", e.target.value),
                 placeholder: "sk-...（清空 = 禁用语义搜索）",
-                style: { width: 260, fontSize: 12, padding: "3px 6px", borderRadius: 6, border: "1px solid rgba(128,128,128,0.35)", background: "rgba(0,0,0,0.25)", color: "inherit" },
+                style: { width: narrow ? "100%" : 260, fontSize: 12, padding: "3px 6px", borderRadius: 6, border: "1px solid rgba(128,128,128,0.35)", background: "rgba(0,0,0,0.25)", color: "inherit" },
               }),
             ],
           }),
           jsx("div", {
-            style: { display: "flex", alignItems: "center", padding: "8px 0", gap: 8 },
+            style: rowStyle(),
             children: [
-              jsx("label", { style: { flex: 1 }, children: "Embedding 模型" }),
+              jsx("label", { style: narrow ? { flex: "0 0 auto" } : { flex: 1, minWidth: 0 }, children: "Embedding 模型" }),
               jsx("input", {
                 type: "text",
                 value: embedModel,
                 onChange: (e) => setEmbedField("embedModel", e.target.value),
                 placeholder: "BAAI/bge-m3",
-                style: { width: 260, fontSize: 12, padding: "3px 6px", borderRadius: 6, border: "1px solid rgba(128,128,128,0.35)", background: "rgba(0,0,0,0.25)", color: "inherit" },
+                style: { width: narrow ? "100%" : 260, fontSize: 12, padding: "3px 6px", borderRadius: 6, border: "1px solid rgba(128,128,128,0.35)", background: "rgba(0,0,0,0.25)", color: "inherit" },
               }),
             ],
           }),
@@ -720,9 +728,9 @@ window.__ModuleLoader__.load({
             ],
           }),
           embedModelsOpen ? jsx("div", {
-            style: { display: "flex", alignItems: "center", gap: 8, padding: "0 0 8px" },
+            style: rowStyle({ padding: "0 0 8px" }),
             children: [
-              jsx("label", { style: { fontSize: 12, opacity: 0.8, flex: "none" }, children: "可选模型：" }),
+              jsx("label", { style: narrow ? { fontSize: 12, opacity: 0.8, flex: "1 1 100%" } : { fontSize: 12, opacity: 0.8, flex: "none" }, children: "可选模型：" }),
               jsx("select", {
                 value: embedModel,
                 onChange: (e) => setEmbedField("embedModel", e.target.value),
@@ -737,15 +745,15 @@ window.__ModuleLoader__.load({
           // ── 分区五：回收站 ──
           sectionTitle("🗑️ 回收站"),
           jsx("div", {
-            style: { display: "flex", alignItems: "center", padding: "8px 0", gap: 8 },
+            style: rowStyle(),
             children: [
-              jsx("label", { style: { flex: 1 }, children: "回收站保留天数（0 = 不自动清除）" }),
+              jsx("label", { style: narrow ? { flex: "0 0 auto" } : { flex: 1, minWidth: 0 }, children: "回收站保留天数（0 = 不自动清除）" }),
               jsx("input", {
                 type: "number",
                 min: 0,
                 value: retention,
                 onChange: (e) => setRetention(e.target.value),
-                style: { width: 72 },
+                style: narrow ? { width: "100%" } : { width: 72 },
               }),
             ],
           }),
@@ -779,37 +787,37 @@ window.__ModuleLoader__.load({
                 .catch((e) => setMsg("渠道策略保存失败：" + (e && e.message ? e.message : String(e))));
             };
             return jsx("div", { children: [
-              jsx("div", { style: { display: "flex", alignItems: "center", padding: "8px 0", gap: 8 }, children: [
-                jsx("label", { style: { flex: 1 }, children: "渠道会话常驻（保留最近 N 个活跃会话，其余随用随放）" }),
+              jsx("div", { style: rowStyle(), children: [
+                jsx("label", { style: narrow ? { flex: "0 0 auto" } : { flex: 1, minWidth: 0 }, children: "渠道会话常驻（保留最近 N 个活跃会话，其余随用随放）" }),
                 jsx("select", {
                   value: en ? "on" : "off",
                   onChange: (e) => applyLocal({ keepAliveSessions: { enabled: e.target.value === "on", count: cnt } }),
-                  style: { width: 88 },
+                  style: narrow ? { width: "100%" } : { width: 88 },
                   children: [jsx("option", { value: "on", children: "开启" }), jsx("option", { value: "off", children: "关闭" })],
                 }),
               ]}),
-              jsx("div", { style: { display: "flex", alignItems: "center", padding: "8px 0", gap: 8 }, children: [
-                jsx("label", { style: { flex: 1 }, children: "常驻个数（1~5）" }),
+              jsx("div", { style: rowStyle(), children: [
+                jsx("label", { style: narrow ? { flex: "0 0 auto" } : { flex: 1, minWidth: 0 }, children: "常驻个数（1~5）" }),
                 jsx("input", {
                   type: "number", min: 1, max: 5, value: cnt,
                   onChange: (e) => { const v = Math.min(5, Math.max(1, Math.floor(Number(e.target.value) || 1))); applyLocal({ keepAliveSessions: { enabled: en, count: v } }); },
-                  style: { width: 72 },
+                  style: narrow ? { width: "100%" } : { width: 72 },
                 }),
               ]}),
-              jsx("div", { style: { display: "flex", alignItems: "center", padding: "8px 0", gap: 8 }, children: [
-                jsx("label", { style: { flex: 1 }, children: "自动释放间隔（分钟，0 = 不自动）" }),
+              jsx("div", { style: rowStyle(), children: [
+                jsx("label", { style: narrow ? { flex: "0 0 auto" } : { flex: 1, minWidth: 0 }, children: "自动释放间隔（分钟，0 = 不自动）" }),
                 jsx("input", {
                   type: "number", min: 0, max: 60, value: swp,
                   onChange: (e) => { const v = Math.min(60, Math.max(0, Math.floor(Number(e.target.value) || 0))); applyLocal({ sweepIntervalMinutes: v }); },
-                  style: { width: 72 },
+                  style: narrow ? { width: "100%" } : { width: 72 },
                 }),
               ]}),
-              jsx("div", { style: { display: "flex", alignItems: "center", padding: "8px 0", gap: 8 }, children: [
-                jsx("label", { style: { flex: 1 }, children: "/new 记忆继承条数（1~30）" }),
+              jsx("div", { style: rowStyle(), children: [
+                jsx("label", { style: narrow ? { flex: "0 0 auto" } : { flex: 1, minWidth: 0 }, children: "/new 记忆继承条数（1~30）" }),
                 jsx("input", {
                   type: "number", min: 1, max: 30, value: inh,
                   onChange: (e) => { const v = Math.min(30, Math.max(1, Math.floor(Number(e.target.value) || 1))); applyLocal({ inheritRecentCount: v }); },
-                  style: { width: 72 },
+                  style: narrow ? { width: "100%" } : { width: 72 },
                 }),
               ]}),
               jsx("div", { style: { fontSize: 12, opacity: 0.6, marginTop: 8 }, children: "常驻 = 保留最近 N 个活跃会话在内存，其余自动释放（数据落盘不丢，下次消息自动恢复）。自动释放间隔 = 每 N 分钟自动执行一次释放（正在处理的消息不受影响），0 表示只手动释放。记忆继承条数建议最大 30，数值越大注入上下文越长、内存占用越高。也可在微信/QQ/飞书发 /cfg 查看设置。" }),
@@ -817,7 +825,7 @@ window.__ModuleLoader__.load({
           })(),
           jsx("div", { style: { borderTop: "1px solid rgba(128,128,128,0.2)", marginTop: 12, paddingTop: 10 } }),
           jsx("div", {
-            style: { display: "flex", alignItems: "center", justifyContent: "flex-end", padding: "6px 0 2px" },
+            style: { display: "flex", alignItems: "center", justifyContent: "flex-end", padding: "6px 0 2px", flexWrap: "wrap", gap: 6 },
             children: [
               jsx(P.Button, {
                 size: "sm", variant: "outline",
@@ -1221,10 +1229,10 @@ window.__ModuleLoader__.load({
         background: "var(--dsw-alias-bg-layer-1, #202024)",
         color: "var(--dsw-alias-label-primary, #eee)",
         borderRadius: 12, padding: "14px 16px 16px", boxSizing: "border-box",
-        width: "min(760px, 94vw)", maxWidth: "94vw", maxHeight: "80vh", overflowY: "auto",
+        width: "min(760px, calc(100vw - 24px))", maxWidth: "calc(100vw - 24px)", maxHeight: "80vh", overflowY: "auto",
         boxShadow: "0 12px 40px rgba(0,0,0,0.45)",
       };
-      return jsx("div", {
+      return inBody(jsx("div", {
         style: overlayStyle,
         "data-dsh-toolbox-overlay": "1",
         onClick: (e) => {
@@ -1453,7 +1461,7 @@ window.__ModuleLoader__.load({
             setTagEditorFor(null);
           },
         }),
-      ] });
+      ] }));
     }
 
     /** 通用代码编辑器：自动换行（默认勾选）+ 全屏（Esc/再点退出）+ 保存 */
