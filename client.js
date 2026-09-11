@@ -117,6 +117,26 @@ window.__ModuleLoader__.load({
       const [doc, setDoc] = React.useState(null);
       const tools = props.tools;
 
+      // ── 内容区窄屏适配（仅作用于本插件自己的容器，不碰官方布局）──
+      // 手机 + 官方设置页左侧 188px 固定导航时，本分区内容区可能只剩 ~200px 宽；
+      // 用 ResizeObserver 测「本容器」实际宽度（而非屏宽），窄于 420px 时设置行纵向堆叠。
+      const hostRef = React.useRef(null);
+      const [hostW, setHostW] = React.useState(0);
+      React.useEffect(() => {
+        const el = hostRef.current;
+        if (!el) return;
+        const measure = () => { try { setHostW(Math.round(el.getBoundingClientRect().width || 0)); } catch {} };
+        measure();
+        if (typeof ResizeObserver === "undefined") return;
+        let ro = null;
+        try {
+          ro = new ResizeObserver(measure);
+          ro.observe(el);
+        } catch {}
+        return () => { try { ro && ro.disconnect(); } catch {} };
+      }, []);
+      const narrow = hostW > 0 && hostW < 420;
+
       const unwrap = (resp) => (resp && typeof resp === "object" && resp.ok === true && resp.value !== undefined ? resp.value : resp);
 
       const refresh = React.useCallback(() => {
@@ -407,12 +427,17 @@ window.__ModuleLoader__.load({
         })),
       ];
 
+      // 设置行样式：窄容器（<420px）纵向堆叠——标题一行、控件一行，避免文字被压成竖柱。
+      const rowStyle = () => narrow
+        ? { display: "flex", flexDirection: "column", alignItems: "stretch", gap: 6, padding: "8px 0" }
+        : { display: "flex", alignItems: "center", gap: 8, padding: "8px 0", flexWrap: "wrap" };
+
       const row = (sw) => {
         const value = doc?.[sw.key] ?? (sw.default !== false);
         return jsx("div", {
-          style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid rgba(128,128,128,0.15)" },
+          style: { display: "flex", alignItems: narrow ? "flex-start" : "center", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid rgba(128,128,128,0.15)" },
           children: [
-            jsx("div", { style: { flex: 1, minWidth: 0, paddingRight: 16 }, children: [
+            jsx("div", { style: { flex: 1, minWidth: narrow ? 120 : 0, paddingRight: narrow ? 8 : 16 }, children: [
               jsx("div", { style: { fontWeight: 500 }, children: sw.label }),
               jsx("div", { style: { fontSize: 12, opacity: 0.65, marginTop: 2 }, children: sw.desc }),
             ] }),
@@ -432,6 +457,7 @@ window.__ModuleLoader__.load({
       });
 
       return jsx("div", {
+        ref: hostRef,
         style: { padding: "0 4px" },
         children: [
           jsx("div", { style: { fontSize: 13, opacity: 0.7, marginBottom: 8 }, children: "每个功能可独立开关；带 ⚠️ 的切换后需重启生效。" }),
@@ -449,23 +475,23 @@ window.__ModuleLoader__.load({
           sectionTitle("⏰ 定时心跳"),
           row(SWITCH_HEART),
           jsx("div", {
-            style: { display: "flex", alignItems: "center", padding: "8px 0", gap: 8, flexWrap: "wrap" },
+            style: rowStyle(),
             children: [
-              jsx("label", { style: { flex: "1 1 160px", minWidth: 0 }, children: "心跳间隔（分钟，最小 5，默认 60）" }),
+              jsx("label", { style: narrow ? { flex: "0 0 auto" } : { flex: "1 1 160px", minWidth: 0 }, children: "心跳间隔（分钟，最小 5，默认 60）" }),
               jsx("span", { style: { fontSize: 11, opacity: 0.55, whiteSpace: "nowrap" }, children: fmtCountdown(nextTimes.interval) ? "⏱ 距下次 " + fmtCountdown(nextTimes.interval) : "" }),
               jsx("input", {
                 type: "number",
                 min: 5,
                 value: scheduleInterval,
                 onChange: (e) => setScheduleInterval(e.target.value),
-                style: { width: 72 },
+                style: narrow ? { width: "100%", maxWidth: 220 } : { width: 72 },
               }),
             ],
           }),
           jsx("div", {
-            style: { display: "flex", alignItems: "center", padding: "8px 0", gap: 8, flexWrap: "wrap" },
+            style: rowStyle(),
             children: [
-              jsx("label", { style: { flex: "1 1 160px", minWidth: 0 }, children: "心跳提示语（{time} 自动替换为当前时间）" }),
+              jsx("label", { style: narrow ? { flex: "0 0 auto" } : { flex: "1 1 160px", minWidth: 0 }, children: "心跳提示语（{time} 自动替换为当前时间）" }),
               jsx(P.Button, {
                 size: "sm", variant: "outline",
                 onClick: () => { if (window.confirm("恢复默认心跳提示语？将覆盖当前内容")) setSchedulePrompt(DEFAULT_HEART_PROMPT); },
@@ -481,7 +507,7 @@ window.__ModuleLoader__.load({
             style: { width: "100%", boxSizing: "border-box", fontSize: 12, padding: "6px 8px", borderRadius: 6, border: "1px solid rgba(128,128,128,0.35)", background: "rgba(0,0,0,0.25)", color: "inherit", outline: "none", marginBottom: 8, resize: "vertical" },
           }),
           jsx("div", {
-            style: { display: "flex", alignItems: "center", gap: 8, padding: "8px 0", flexWrap: "wrap" },
+            style: rowStyle(),
             children: [
               jsx("label", { style: { flex: "none" }, children: "心跳目标会话" }),
               jsx("select", {
@@ -494,7 +520,7 @@ window.__ModuleLoader__.load({
           }),
           jsx("div", { style: { fontSize: 12, opacity: 0.6, marginBottom: 8 }, children: "间隔心跳注入到哪：主工作区 = 内部巡检；选 📱 微信/QQ/飞书 = 结果定时推送到手机（需安装 dsh-msg-hub插件，命令：dsh plugin --profile web add dsh-msg-hub）；指定会话 = 只注入该会话。" }),
           jsx("div", {
-            style: { display: "flex", alignItems: "center", gap: 8, padding: "8px 0", flexWrap: "wrap" },
+            style: rowStyle(),
             children: [
               jsx("label", { style: { flex: "none" }, children: "定点定时" }),
               jsx("span", { style: { fontSize: 11, opacity: 0.55, whiteSpace: "nowrap" }, children: fmtCountdown(nextTimes.cron) ? "⏱ 距下次 " + fmtCountdown(nextTimes.cron) : "" }),
@@ -531,7 +557,7 @@ window.__ModuleLoader__.load({
           }),
           jsx("div", { style: { fontSize: 12, opacity: 0.6 }, children: "在指定时间点额外触发一次心跳（如每天 09:00、每周一 09:00、每月 1 号 09:00）。" }),
           jsx("div", {
-            style: { display: "flex", alignItems: "center", gap: 8, padding: "8px 0", flexWrap: "wrap" },
+            style: rowStyle(),
             children: [
               jsx("label", { style: { flex: "none" }, children: "定点定时目标会话" }),
               jsx("select", {
@@ -544,9 +570,9 @@ window.__ModuleLoader__.load({
           }),
           jsx("div", { style: { fontSize: 12, opacity: 0.6, marginBottom: 8 }, children: "定点定时注入到哪：与间隔心跳可不同（如：间隔心跳主工作区巡检 + 每天 09:00 推送微信晨报）。选 📱 微信/QQ/飞书 = 结果定时推送到手机（需安装 dsh-msg-hub插件，命令：dsh plugin --profile web add dsh-msg-hub）。" }),
           jsx("div", {
-            style: { display: "flex", alignItems: "center", padding: "8px 0", gap: 8, flexWrap: "wrap" },
+            style: rowStyle(),
             children: [
-              jsx("label", { style: { flex: "1 1 160px", minWidth: 0 }, children: "定点定时提示语（与间隔心跳独立）" }),
+              jsx("label", { style: narrow ? { flex: "0 0 auto" } : { flex: "1 1 160px", minWidth: 0 }, children: "定点定时提示语（与间隔心跳独立）" }),
               jsx(P.Button, {
                 size: "sm", variant: "outline",
                 onClick: () => { if (window.confirm("恢复默认定点定时提示语？将覆盖当前内容")) setScheduleCronPrompt(DEFAULT_CRON_PROMPT); },
@@ -564,7 +590,7 @@ window.__ModuleLoader__.load({
 
           jsx("div", { style: { borderTop: "1px solid rgba(128,128,128,0.2)", marginTop: 12, paddingTop: 10 } }),
           jsx("div", {
-            style: { display: "flex", alignItems: "center", padding: "8px 0", gap: 8, flexWrap: "wrap" },
+            style: rowStyle(),
             children: [
               jsx("div", { style: { flex: 1, minWidth: 0 }, children: [
                 jsx("div", { style: { fontWeight: 500 }, children: "微信消息分段上限" }),
@@ -576,7 +602,7 @@ window.__ModuleLoader__.load({
                 max: 5000,
                 value: wxSegment,
                 onChange: (e) => setWxSegmentField(e.target.value),
-                style: { width: 72 },
+                style: narrow ? { width: "100%", maxWidth: 220 } : { width: 72 },
               }),
             ],
           }),
@@ -585,15 +611,15 @@ window.__ModuleLoader__.load({
           sectionTitle("🔧 功能开关"),
           ...SWITCHES.map(row),
           jsx("div", {
-            style: { display: "flex", alignItems: "center", padding: "8px 0", gap: 8, flexWrap: "wrap" },
+            style: rowStyle(),
             children: [
-              jsx("label", { style: { flex: "1 1 160px", minWidth: 0 }, children: "折叠行数阈值（用户/AI 消息超过该行数即折叠，默认 15，0 = 不折叠）" }),
+              jsx("label", { style: narrow ? { flex: "0 0 auto" } : { flex: "1 1 160px", minWidth: 0 }, children: "折叠行数阈值（用户/AI 消息超过该行数即折叠，默认 15，0 = 不折叠）" }),
               jsx("input", {
                 type: "number",
                 min: 0,
                 value: threshold,
                 onChange: (e) => setThreshold(e.target.value),
-                style: { width: 72 },
+                style: narrow ? { width: "100%", maxWidth: 220 } : { width: 72 },
               }),
             ],
           }),
@@ -601,15 +627,15 @@ window.__ModuleLoader__.load({
           sectionTitle("🔍 搜索"),
           jsx("div", { style: { fontSize: 12, opacity: 0.75, marginBottom: 8, color: "#e5a54b" }, children: "⚠️ 搜索默认全部关闭（省内存）。开启后比较占内存：自研/语义搜索需解压会话；DSH 的内存释放机制是 Node 垃圾回收，大对象释放后堆水位不会立即下降，必须重启 DSH 服务才会彻底释放。官方搜索（SQLite 索引）不读会话文件，占用最低，建议优先使用。" }),
           jsx("div", {
-            style: { display: "flex", alignItems: "center", padding: "8px 0", gap: 8, flexWrap: "wrap" },
+            style: rowStyle(),
             children: [
-              jsx("label", { style: { flex: "1 1 160px", minWidth: 0 }, children: "搜索缓存秒数（关键词/语义同词缓存，0 = 不缓存，默认 120）" }),
+              jsx("label", { style: narrow ? { flex: "0 0 auto" } : { flex: "1 1 160px", minWidth: 0 }, children: "搜索缓存秒数（关键词/语义同词缓存，0 = 不缓存，默认 120）" }),
               jsx("input", {
                 type: "number",
                 min: 0,
                 value: searchCacheSec,
                 onChange: (e) => setSearchCacheSec(e.target.value),
-                style: { width: 72 },
+                style: narrow ? { width: "100%", maxWidth: 220 } : { width: 72 },
               }),
             ],
           }),
