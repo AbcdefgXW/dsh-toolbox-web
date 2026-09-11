@@ -29,6 +29,7 @@ import {
   clearProjCache,
   WORKSPACE_ROOT,
 } from "./lib/sessions.js";
+import { sessionStatsReliable, warmStatsCache } from "./lib/stats-cache.js";
 import {
   listSubdirs,
   createSubdir,
@@ -139,9 +140,17 @@ class ToolsApi extends Service {
   // ── 会话管理 ──
   async "sessions.list"() {
     const all = await listAllSessions();
+    // 归档会话不进入主列表：与官方 UI 一致（归档 = 左侧隐藏，只在「归档」tab 出现）
+    const archivedIds = new Set();
+    try {
+      const reg = this.ctx.get("workspaceRegistry");
+      const ids = (reg && typeof reg.requireState === "function" && reg.requireState().archivedSessionIds) || [];
+      for (const id of ids) archivedIds.add(id);
+    } catch {}
     const out = [];
     for (const s of all) {
-      const stats = readSessionStatsLite(s.path, s.sessionId);
+      if (archivedIds.has(s.sessionId) || archivedIds.has(s.sessionDir)) continue;
+      const stats = sessionStatsReliable(s.path, s.sessionId);
       // 最新一条消息预览：只解尾部帧（内存可控），不解压全部
       let latest = null;
       try {
@@ -254,7 +263,8 @@ class ToolsApi extends Service {
       if (!s.header) continue;
       // 子代理会话跟随父会话管理，不作为独立条目清除
       if (s.header?.parentSession) continue;
-      const stats = readSessionStatsLite(s.path, s.sessionId);
+          // 用可靠统计判定：官方缓存对历史会话常给 0 轮，直接采信会把有内容的会话误判为空并删除（实测 61 个）
+      const stats = sessionStatsReliable(s.path, s.sessionId);
       if (stats.turns === 0) empty.push(s);
     }
     const items = [];
@@ -684,7 +694,7 @@ class ToolsApi extends Service {
           // 官方注册表存的是会话真实 id；个别会话列表项以目录名兜底（仅存新代时）
           const s = all.find((x) => x.sessionId === id || x.sessionDir === id);
           if (s) {
-            const stats = readSessionStatsLite(s.path, s.sessionId);
+            const stats = sessionStatsReliable(s.path, s.sessionId);
             archived.push({
               sessionId: id,
               cwd: s.cwd,
@@ -699,6 +709,29 @@ class ToolsApi extends Service {
       }
     }
     return archived;
+  }
+
+  /** 清理幽灵归档 ID：归档名单里「文件已不存在」的条目（会话被删/移走，只在官方注册表留了 id）。 */
+  async "archived.cleanGhosts"() {
+    const reg = this.ctx.get("workspaceRegistry");
+    if (!reg || typeof reg.requireState !== "function" || typeof reg.setState !== "function") {
+      return { ok: false, error: "workspace 服务不可用" };
+    }
+    try {
+      const state = reg.requireState();
+      const ids = Array.isArray(state.archivedSessionIds) ? state.archivedSessionIds : [];
+      if (!ids.length) return { ok: true, removed: 0, total: 0 };
+      const all = await listAllSessions();
+      const present = new Set();
+      for (const s of all) { present.add(s.sessionId); if (s.sessionDir) present.add(s.sessionDir); }
+      const ghosts = ids.filter((id) => !present.has(id));
+      if (!ghosts.length) return { ok: true, removed: 0, total: ids.length };
+      await reg.setState({ ...state, archivedSessionIds: ids.filter((id) => present.has(id)) });
+      return { ok: true, removed: ghosts.length, total: ids.length, sample: ghosts.slice(0, 5) };
+    } catch (err) {
+      logErr("archived.cleanGhosts", err);
+      return { ok: false, error: String(err && err.message ? err.message : err) };
+    }
   }
 
   /** 归档 Tab 的删除：进回收站 + 从归档列表移除（不留残影）。 */
@@ -917,6 +950,9 @@ function logErr(where, err) {
 export function apply(ctx, config) {
   const log = ctx.logger;
 
+  // 后台预热会话统计缓存：官方 projcache 对历史/非活动项目会话常失效（实测 68/180 误判为 0 轮）
+  try { warmStatsCache(() => listAllSessions()).catch(() => {}); } catch {}
+
   // ── 0. 启动探针（排查 client 加载） ──
   try {
     fs.mkdirSync(PLUGIN_STATE_DIR, { recursive: true });
@@ -995,6 +1031,7 @@ export function apply(ctx, config) {
       invocation("configfile.save", ["content"]),
       invocation("archived.list"),
       invocation("archived.restore", ["sessionId"]),
+      invocation("archived.cleanGhosts"),
       invocation("archived.delete", ["sessionId"]),
       invocation("trash.list"),
       invocation("trash.view", ["entryDir", "limit"]),

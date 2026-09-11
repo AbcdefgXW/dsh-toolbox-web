@@ -911,9 +911,13 @@ window.__ModuleLoader__.load({
       }, [tools, unwrap]);
 
       const refreshTags = React.useCallback(() => {
+        const normalize = (r) => ({
+          bySession: r && typeof r === "object" && r.bySession && typeof r.bySession === "object" ? r.bySession : {},
+          all: Array.isArray(r && r.all) ? r.all : [],
+        });
         tools["tags.list"]()
-          .then((resp) => setTags(unwrap(resp) || { bySession: {}, all: [] }))
-          .catch((e) => console.error("dsh-toolbox: tags.list 失败", e));
+          .then((resp) => setTags(normalize(unwrap(resp))))
+          .catch((e) => { console.error("dsh-toolbox: tags.list 失败", e); setTags({ bySession: {}, all: [] }); });
       }, [tools, unwrap]);
 
       const [cfg, setCfg] = React.useState({});
@@ -1006,7 +1010,7 @@ window.__ModuleLoader__.load({
       // 当前会话所在一级组（默认折叠：非当前组折叠，当前组展开）
       const curSession = sessions.find((x) => x.sessionId === currentId);
       const currentRoot = curSession ? (registeredPaths.has(curSession.cwd) ? curSession.cwd : "(未分组)") : null;
-      const mainTag = (sid) => (tags.bySession[sid] || [])[0] || "(未标记)";
+      const mainTag = (sid) => ((tags.bySession || {})[sid] || [])[0] || "(未标记)";
       const currentTag = curSession ? mainTag(curSession.sessionId) : null;
       const isCollapsed = (g) => (collapsed[g] === undefined ? g !== currentRoot : collapsed[g]);
       const toggleCollapsed = (g) => setCollapsed({ ...collapsed, [g]: !isCollapsed(g) });
@@ -1104,7 +1108,7 @@ window.__ModuleLoader__.load({
             jsx("div", { style: { flex: 1, minWidth: 160, overflow: "hidden" }, children: [
               jsx("div", { style: { display: "flex", alignItems: "center", gap: 6, minWidth: 0 }, children: [
                 isCurrent ? jsx("span", { style: { flex: "none", fontSize: 11, fontWeight: 600, color: "#fff", background: "#2f7d32", borderRadius: 4, padding: "1px 5px" }, children: "当前" }) : null,
-                (tags.bySession[sess.sessionId] || []).map((tg) => jsx("span", { key: tg, style: { flex: "none", fontSize: 10, background: "rgba(80,120,255,0.25)", color: "#9db8ff", borderRadius: 4, padding: "1px 5px" }, children: tg })),
+                ((tags.bySession || {})[sess.sessionId] || []).map((tg) => jsx("span", { key: tg, style: { flex: "none", fontSize: 10, background: "rgba(80,120,255,0.25)", color: "#9db8ff", borderRadius: 4, padding: "1px 5px" }, children: tg })),
                 jsx("span", { style: { fontSize: 13, fontWeight: isCurrent ? 600 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", title }, children: title }),
               ] }),
               jsx("div", {
@@ -1219,6 +1223,10 @@ window.__ModuleLoader__.load({
         children: icon + " " + label,
       });
 
+      // 打开后极短时间内忽略遮罩点击：移动端 touch→click 合成可能落在刚渲染的遮罩上 → 秒关
+      const openedAtRef = React.useRef(0);
+      React.useEffect(() => { if (props.open) openedAtRef.current = Date.now(); }, [props.open]);
+
       if (!props.open) return null;
       const overlayStyle = {
         position: "fixed", inset: 0, zIndex: 1000, display: "flex",
@@ -1237,6 +1245,7 @@ window.__ModuleLoader__.load({
         "data-dsh-toolbox-overlay": "1",
         onClick: (e) => {
           if (window.__dsdDrag) { e.stopPropagation(); return; }
+          if (Date.now() - (openedAtRef.current || 0) < 350) return; // 防 touch 合成秒关
           props.onClose();
         },
         children: [
@@ -1386,13 +1395,13 @@ window.__ModuleLoader__.load({
                     key: pid,
                     style: { marginBottom: 8 },
                     children: [
-                      jsx("div", { style: { fontSize: 12, fontWeight: 600, opacity: 0.85, padding: "6px 2px 2px" }, children: "🧬 父会话：" + (parentTitles[pid] || pid.slice(0, 12)) + "（" + byParent[pid].length + "）" }),
+                      jsx("div", { style: { fontSize: 12, fontWeight: 600, opacity: 0.85, padding: "6px 2px 2px" }, children: "🧬 父会话：" + (parentTitles[pid] || pid.slice(0, 12)) + "（" + (byParent[pid] || []).length + "）" }),
                       byParent[pid].map((s) => jsx("div", {
                         key: s.sessionId,
                         style: { display: "flex", alignItems: "center", gap: 6, padding: "6px 4px", borderBottom: "1px solid rgba(128,128,128,0.12)" },
                         children: [
                           jsx("div", { style: { flex: 1, minWidth: 0 }, children: [
-                            jsx("div", { style: { fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, children: s.title || "（无标题）" }),
+                            jsx("div", { style: { fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, children: emptySessionLabel(s) || s.title || "（无标题）" }),
                             jsx("div", { style: { fontSize: 11, opacity: 0.55 }, children: (s.cwd || "") + " · " + (s.turns || 0) + " 轮 · " + (s.size ? (s.size / 1024).toFixed(0) + "KB" : "") }),
                             s.latest ? jsx("div", { style: { fontSize: 11, opacity: 0.6, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, children: "💬 " + s.latest }) : null,
                           ] }),
@@ -1449,7 +1458,7 @@ window.__ModuleLoader__.load({
         }),
         tagEditorFor && jsx(TagEditor, {
           title: list && list.byId && list.byId[tagEditorFor] ? list.byId[tagEditorFor].displayTitle : tagEditorFor,
-          current: tags.bySession[tagEditorFor] || [],
+          current: (tags.bySession || {})[tagEditorFor] || [],
           all: tags.all || [],
           bySession: tags.bySession || {},
           busy,
@@ -1814,8 +1823,7 @@ window.__ModuleLoader__.load({
      */
     function emptySessionLabel(it) {
       if (!it || typeof it.turns !== "number" || it.turns !== 0) return null;
-      const base = String(it.cwd || "").replace(/[/\\]+$/, "").split(/[/\\]/).pop() || "";
-      return "（空会话）" + (base && base !== "?" ? base : "未命名");
+      return "（空会话 · 未使用 · 可清理）";
     }
 
     /** 标签编辑器：点选已有标签（避免手输错字符产生分裂标签）+ 输入新标签 + 管理（删除/重命名） */
@@ -1952,7 +1960,11 @@ window.__ModuleLoader__.load({
               jsx("div", {
                 style: { fontSize: 11, opacity: 0.55, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "copy", textDecoration: "underline dotted rgba(128,128,128,0.4)", title: it.sessionId + "（点击复制完整 ID）" },
                 onClick: (e) => onCopy && onCopy(it.sessionId, e),
-                children: "📋 " + short + (it.cwd ? " · " + it.cwd : "") + (fmtStats(it) ? " · " + fmtStats(it) : ""),
+                children: "📋 " + short + (it.cwd ? " · " + it.cwd : ""),
+              }),
+              jsx("div", {
+                style: { fontSize: 11, opacity: 0.7, marginTop: 2 },
+                children: fmtStats(it) || "（无统计）",
               }),
             ] }),
             jsx(P.Button, {
@@ -1980,6 +1992,16 @@ window.__ModuleLoader__.load({
           jsx("div", { style: { display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }, children: [
             jsx("div", { style: { flex: 1, fontSize: 12, opacity: 0.7 }, children: "dsh 官方归档的会话（左侧隐藏，文件仍在 sessions 区）。恢复后重启显示；删除进回收站" }),
             jsx(P.Button, { size: "sm", onClick: refresh, children: "刷新" }),
+            jsx(P.Button, {
+              size: "sm", disabled: busy || loading,
+              title: "清理归档名单里「文件已不存在」的幽灵 ID（仅清注册表记录，不动会话文件）",
+              onClick: () => confirm("清理归档名单里「文件已不存在」的幽灵 ID？\n仅清理 dsh 注册表记录，不动任何会话文件。") && run("清理幽灵", () => tools["archived.cleanGhosts"]()).then((r) => {
+                const v = unwrap(r);
+                setMsg(v && v.removed ? "已清理 " + v.removed + " 个幽灵 ID（重启后生效）" : "没有幽灵 ID 需要清理");
+                refresh();
+              }),
+              children: "清理幽灵",
+            }),
           ] }),
           msg ? jsx("div", { style: { fontSize: 12, marginBottom: 6 }, children: msg }) : null,
           loading && items.length === 0
@@ -2836,11 +2858,14 @@ window.__ModuleLoader__.load({
         };
 
         // 工具箱面板状态（挂到模块级变量，按钮与面板共享）
-        let panelOpen = false;
-        const panelState = { open: false, listeners: new Set() };
+        // open 值存 window：跨插件重载（apply 重跑）保持，避免"按钮与面板状态错位 → 点不开"
+        if (typeof window.__dsToolboxPanelOpen !== "boolean") window.__dsToolboxPanelOpen = false;
+        const panelState = { open: window.__dsToolboxPanelOpen, listeners: new Set() };
         const setPanelOpen = (v) => {
           panelState.open = v;
-          panelState.listeners.forEach((fn) => fn(v));
+          try { window.__dsToolboxPanelOpen = v; } catch {}
+          // 任一订阅者报错不得中断其余（否则面板状态不同步，表现为"点不开"）
+          panelState.listeners.forEach((fn) => { try { fn(v); } catch (e) { console.error("dsh-toolbox: 面板状态订阅者报错", e); } });
         };
         const usePanelOpen = () => {
           const [open, setOpen] = React.useState(panelState.open);
@@ -2964,10 +2989,31 @@ window.__ModuleLoader__.load({
             ],
           });
         };
+        /** 错误边界：弹窗内任何渲染错误都不至于卡死界面；把错误显示出来（便于截图反馈）并提供复位出口。 */
+        class ToolboxErrorBoundary extends React.Component {
+          constructor(p) { super(p); this.state = { err: null }; }
+          static getDerivedStateFromError(err) { return { err }; }
+          componentDidCatch(err, info) { console.error("dsh-toolbox: 面板渲染错误", err, info); }
+          render() {
+            if (this.state.err) {
+              return jsx("div", {
+                style: { position: "fixed", inset: 0, zIndex: 1200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, background: "rgba(0,0,0,0.6)" },
+                children: jsx("div", { style: { maxWidth: 520, width: "100%", background: "var(--dsw-alias-bg-layer-1,#202024)", color: "var(--dsw-alias-label-primary,#eee)", borderRadius: 12, padding: 16, fontSize: 13, lineHeight: 1.6, boxSizing: "border-box" }, children: [
+                  jsx("div", { style: { fontWeight: 600, marginBottom: 6 }, children: "工具箱渲染出错（可截图反馈）" }),
+                  jsx("div", { style: { opacity: 0.75, marginBottom: 12, wordBreak: "break-word", maxHeight: 200, overflowY: "auto" }, children: String((this.state.err && this.state.err.message) || this.state.err) + (this.state.err && this.state.err.stack ? "\n\n" + String(this.state.err.stack).split("\n").slice(0, 10).join("\n") : "") }),
+                  jsx(P.Button, { size: "sm", onClick: () => { try { this.setState({ err: null }); } catch {} try { this.props.onClose && this.props.onClose(); } catch {} }, children: "关闭并复位" }),
+                ] }),
+              });
+            }
+            return this.props.children;
+          }
+        }
+
         const ToolboxPanelHost = (slotProps) => {
           const open = usePanelOpen();
+          const close = () => setPanelOpen(false);
           return open
-            ? jsx(ToolboxPanel, { tools, unwrap, useSessions: slotProps.useSessions, useWorkspaces: slotProps.useWorkspaces, openSession, forkSession, open, onClose: () => setPanelOpen(false) })
+            ? jsx(ToolboxErrorBoundary, { onClose: close, children: jsx(ToolboxPanel, { tools, unwrap, useSessions: slotProps.useSessions, useWorkspaces: slotProps.useWorkspaces, openSession, forkSession, open, onClose: close }) })
             : null;
         };
 
