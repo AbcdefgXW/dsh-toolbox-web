@@ -32,7 +32,8 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '24'                     # 自带 npm 11（trusted publishing 要求 CLI ≥ 11.5.1）
-          package-manager-cache: false           # 不设 registry-url：避免 setup-node 生成含占位 token 的 .npmrc，抢在 OIDC 之前做认证
+          registry-url: 'https://registry.npmjs.org'   # 官方示例要求；配合发布步骤清空 NODE_AUTH_TOKEN，避免占位 token 干扰 OIDC
+          package-manager-cache: false
 
       - name: 环境与 OIDC 诊断
         run: |
@@ -70,7 +71,7 @@ jobs:
           NODE_AUTH_TOKEN: ""                      # 显式清空：确保 npm 走 OIDC trusted publishing，而不是 .npmrc 里的占位 token
         run: |
           # 输出落盘再打印：debug 日志级别下 npm 的输出偶尔会被 Actions 吞掉
-          npm publish --access public ${{ inputs.dry_run && '--dry-run' || '' }} > /tmp/pub.log 2>&1 || {
+          npm publish --access public --loglevel=debug ${{ inputs.dry_run && '--dry-run' || '' }} > /tmp/pub.log 2>&1 || {
             echo "=== npm publish 失败，完整输出如下 ==="
             cat /tmp/pub.log
             exit 1
