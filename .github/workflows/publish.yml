@@ -32,8 +32,7 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '24'                     # 自带 npm 11（trusted publishing 要求 CLI ≥ 11.5.1）
-          registry-url: 'https://registry.npmjs.org'
-          package-manager-cache: false           # 发布构建不使用缓存
+          package-manager-cache: false           # 不设 registry-url：避免 setup-node 生成含占位 token 的 .npmrc，抢在 OIDC 之前做认证
 
       - name: 环境与 OIDC 诊断
         run: |
@@ -63,5 +62,7 @@ jobs:
           fi
 
       - name: 发布到 npm
+        env:
+          NODE_AUTH_TOKEN: ""                      # 显式清空：确保 npm 走 OIDC trusted publishing，而不是 .npmrc 里的占位 token
         run: npm publish --access public ${{ inputs.dry_run && '--dry-run' || '' }}
         # trusted publishing 会自动生成 provenance，无需 --provenance
