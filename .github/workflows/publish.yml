@@ -71,7 +71,7 @@ jobs:
           NODE_AUTH_TOKEN: ""                      # 显式清空：确保 npm 走 OIDC trusted publishing，而不是 .npmrc 里的占位 token
         run: |
           # 输出落盘再打印：debug 日志级别下 npm 的输出偶尔会被 Actions 吞掉
-          npm publish --access public --loglevel=debug ${{ inputs.dry_run && '--dry-run' || '' }} > /tmp/pub.log 2>&1 || {
+          npm publish --access public --loglevel=verbose ${{ inputs.dry_run && '--dry-run' || '' }} > /tmp/pub.log 2>&1 || {
             echo "=== npm publish 失败，完整输出如下 ==="
             cat /tmp/pub.log
             exit 1
