@@ -42,6 +42,7 @@ jobs:
         run: npm ci
 
       - name: 校验 tag 与 package.json 版本一致
+        if: startsWith(github.ref, 'refs/tags/')   # 仅 tag 发布时校验；手动 dispatch 不适用
         run: |
           PKG=$(node -p "require('./package.json').version")
           TAG="${GITHUB_REF_NAME#v}"
