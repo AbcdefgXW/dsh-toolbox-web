@@ -68,6 +68,12 @@ jobs:
       - name: 发布到 npm
         env:
           NODE_AUTH_TOKEN: ""                      # 显式清空：确保 npm 走 OIDC trusted publishing，而不是 .npmrc 里的占位 token
-          NPM_CONFIG_LOGLEVEL: "debug"             # 失败时便于查看 OIDC 认证过程
-        run: npm publish --access public ${{ inputs.dry_run && '--dry-run' || '' }}
+        run: |
+          # 输出落盘再打印：debug 日志级别下 npm 的输出偶尔会被 Actions 吞掉
+          npm publish --access public ${{ inputs.dry_run && '--dry-run' || '' }} > /tmp/pub.log 2>&1 || {
+            echo "=== npm publish 失败，完整输出如下 ==="
+            cat /tmp/pub.log
+            exit 1
+          }
+          cat /tmp/pub.log
         # trusted publishing 会自动生成 provenance，无需 --provenance
