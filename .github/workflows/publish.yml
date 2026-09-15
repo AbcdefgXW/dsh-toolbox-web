@@ -1,0 +1,56 @@
+name: Publish Package
+
+# 推 tag（v0.1.29 这种）时自动发布到 npm。
+# 认证走 OIDC trusted publishing：不需要任何 npm token，也不需要 OTP。
+# 前置（一次性，在 npmjs.com 包设置里配）：Trusted Publisher → GitHub Actions
+#   Organization or user: AbcdefgXW
+#   Repository:           dsh-toolbox-web
+#   Workflow filename:    publish.yml
+#   Allowed actions:      勾上「npm publish」（直接发布；stage publish 默认已允许）
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: '只验证 OIDC 认证与打包，不真正发布'
+        type: boolean
+        default: false
+
+permissions:
+  id-token: write   # OIDC，必须
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'                     # 自带 npm 11（trusted publishing 要求 CLI ≥ 11.5.1）
+          registry-url: 'https://registry.npmjs.org'
+          package-manager-cache: false           # 发布构建不使用缓存
+
+      - name: 环境版本
+        run: node -v && npm -v
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 校验 tag 与 package.json 版本一致
+        run: |
+          PKG=$(node -p "require('./package.json').version")
+          TAG="${GITHUB_REF_NAME#v}"
+          echo "package.json = $PKG / tag = $TAG"
+          if [ "$PKG" != "$TAG" ]; then
+            echo "::error::版本不一致：package.json ($PKG) ≠ tag ($TAG)，已阻止发布"
+            exit 1
+          fi
+
+      - name: 发布到 npm
+        run: npm publish --access public ${{ inputs.dry_run && '--dry-run' || '' }}
+        # trusted publishing 会自动生成 provenance，无需 --provenance
