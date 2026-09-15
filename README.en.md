@@ -129,13 +129,13 @@ Restart dsh after editing; check logs with `docker logs deepseek-harness` if it 
 After restarting `dsh web`, hard-refresh the browser (Ctrl+Shift+R):
 
 1. **🧰 Toolbox** (bottom-left button; **monochrome icon** in the collapsed rail / on mobile) — 7 tabs:
-   - **💬 Sessions**: sessions grouped by workspace/tag; per row: delete (to trash), duplicate (`-copyN`), move, reset workspace root, tag, view content; empty sessions labeled `(empty session)`
-   - **🗑️ Trash**: deleted sessions/subdirectories — restore / purge / preview
-   - **📁 Subdirectories**: create / rename / delete / duplicate dirs under a workspace, batch-assign sessions
-   - **🔍 Search**: full-text search across sessions, highlight + click-to-jump
    - **⚙️ Presets**: edit Agent presets online (`~/.agent-presets`)
    - **📄 Config**: edit the dsh config file online (YAML validation + atomic write)
+   - **📁 Subdirectories**: create / rename / delete / duplicate dirs under a workspace, batch-assign sessions
+   - **💬 Sessions**: sessions grouped by workspace/tag; per row: delete (to trash), duplicate (`-copyN`), move, reset workspace root, tag, view content; empty sessions labeled `(empty session)`
+   - **🗑️ Trash**: deleted sessions/subdirectories — restore / purge / preview
    - **🗄 Archive**: view / restore / delete officially archived sessions
+   - **🔍 Search**: full-text search across sessions, highlight + click-to-jump
 2. **Settings → Toolbox**: feature toggles + scheduled heartbeat config
 3. **⏰ Scheduled Heartbeat** (optional, OpenClaw-style): Settings → Toolbox → Scheduled Heartbeat
    - toggle + interval (minutes) + prompt (`{time}` replaced with current time) + countdown to next run

@@ -1276,12 +1276,13 @@ window.__ModuleLoader__.load({
             ] }),
           ] }),
           jsx("div", { style: { display: "flex", alignItems: "center", flexWrap: "wrap", marginBottom: 8 }, children: [
+            // Tab 顺序（2026-09-16 用户指定）：预设 → 配置 → 子目录 → 会话 → 回收站 → 子代理 → 归档 → 搜索（默认关，排最后）
+            cfg.presetEdit !== false && tabBtn("presets", "预设", "⚙️"),
+            cfg.configEditor !== false && tabBtn("config", "配置", "📄"),
+            cfg.workspaceManage !== false && tabBtn("subdirs", "子目录", "📁"),
             cfg.sessionManage !== false && tabBtn("sessions", "会话", "💬"),
             tabBtn("trash", "回收站", "🗑️"),
             tabBtn("subagents", "子代理", "🧬"),
-            cfg.workspaceManage !== false && tabBtn("subdirs", "子目录", "📁"),
-            cfg.presetEdit !== false && tabBtn("presets", "预设", "⚙️"),
-            cfg.configEditor !== false && tabBtn("config", "配置", "📄"),
             tabBtn("archived", "归档", "🗄"),
             cfg.customSearch !== false && tabBtn("search", "搜索", "🔍"),
           ] }),
