@@ -35,8 +35,18 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
           package-manager-cache: false           # 发布构建不使用缓存
 
-      - name: 环境版本
-        run: node -v && npm -v
+      - name: 环境与 OIDC 诊断
+        run: |
+          echo "node $(node -v) / npm $(npm -v)"
+          echo "ACTIONS_ID_TOKEN_REQUEST_URL  : $([ -n "$ACTIONS_ID_TOKEN_REQUEST_URL" ] && echo YES || echo NO)"
+          echo "ACTIONS_ID_TOKEN_REQUEST_TOKEN: $([ -n "$ACTIONS_ID_TOKEN_REQUEST_TOKEN" ] && echo YES || echo NO)"
+          echo "NODE_AUTH_TOKEN               : $([ -n "$NODE_AUTH_TOKEN" ] && echo YES || echo NO)"
+          echo "--- npmrc（token 已脱敏）---"
+          for f in "$HOME/.npmrc" .npmrc; do
+            if [ -f "$f" ]; then echo "[$f]"; sed -E 's/(_authToken=).*/\1<redacted>/' "$f"; fi
+          done
+          echo "--- registry ---"
+          npm config get registry
 
       - name: 安装依赖
         run: npm ci
