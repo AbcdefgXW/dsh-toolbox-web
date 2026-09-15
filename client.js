@@ -2894,19 +2894,21 @@ window.__ModuleLoader__.load({
           return open;
         };
 
-        // 按钮完全对齐「导入会话」(dsh-chat-import) 的实现——其注释明确：视觉逐项对齐侧边栏
-        //「设置」按钮（行高 22px、padding 6px 2px 6px 10px、gap 8px、圆角 12px、16×16 图标、
-        // 颜色/悬停用侧边栏同一 CSS 变量 --dsw-alias-label-primary / interactive-bg-hover，
-        // 明暗主题下与设置按钮一致）；rail（抽屉窄栏）态对齐同列图标按钮：36×36 圆钮。
-        // rowFree 三态：行容器共享行（flex:1 1 auto/width:auto 自动排列）；column/wrap
-        // 容器（其它插件改纵排）→ flex:0 0 auto + width:100% 占满宽。
         // 按钮完整复刻「导入会话」(dsh-chat-import)——官方槽位传 wide prop
         //（wide===false=窄栏 rail 态→36×36 圆钮只显图标；否则图标+文字）。
+        // 视觉参数取自官方「设置」按钮的**真实 CSS**（实测 dsh-client-ui-settings-general/lib/client.js
+        // 的 `.VOzbGW_trigger`）：宽态 height 42px、padding 0 10px 0 8px、gap 8px、圆角 12px、
+        // 14px/400 lh22、font-family inherit、overflow hidden、图标 16×16；rail 态 36×36、
+        // 圆角 50%、图标 18px 居中、padding 0。颜色/悬停用侧边栏同一 CSS 变量
+        // --dsw-alias-label-primary / --dsw-alias-interactive-bg-hover，明暗主题下与设置按钮一致。
+        // ⚠️ 2026-09-16 修正（用户报告"图标文字没跟导入会话/设置对齐"）：旧值 padding 6px 2px 6px 10px
+        // 且**未设 height**（被内容撑成 34px）⇒ 比「设置」「导入会话」（均 42px）矮 8px、图标左缘偏 6px。
+        // rowFree 三态：行容器共享行（flex:1 1 auto/width:auto 自动排列）；column/wrap
+        // 容器（其它插件改纵排）→ flex:0 0 auto + width:100% 占满宽。
         // footer 布局经 [data-slot='sidebar.footer.action'] 锚点的父元素判定
         //（flexWrap/flexDirection），三种模式：wrap 容器→行内独占一行；nowrap+整行占用者
         //（cordis 徽标/插件市场 launcher）→fixed 浮动独占一行（不会顶掉别人）；nowrap 无
-        // 占用者→row 容器共享行 flex:1 1 auto / column 容器全宽。样式逐项对齐「设置」按钮
-        //（--dsw-alias-label-primary、14px/22px、padding 6px 2px 6px 10px、圆角 12px）。
+        // 占用者→row 容器共享行 flex:1 1 auto / column 容器全宽。
         // 不做任何自定义媒体查询——移动端「展开」即宽态=图标+文字，与导入会话完全一致，
         // 抽屉窄栏/折叠由官方 wide 驱动只显图标。
         const footerLayout = () => {
@@ -2970,13 +2972,16 @@ window.__ModuleLoader__.load({
           }, [rail]);
           const floating = !layout.wraps && !!anchor;
           const rowFree = !layout.wraps && !!layout.dir && layout.dir.startsWith("row");
+          // 与官方「设置」按钮同参数：height 42 / padding 0 10px 0 8px / 圆角 12 / gap 8
           const baseStyle = {
             boxSizing: "border-box", display: "flex", alignItems: "center",
             justifyContent: rail ? "center" : undefined,
             gap: rail ? "0" : "8px",
             background: "transparent", border: "none",
             color: "var(--dsw-alias-label-primary)",
-            borderRadius: rail ? "50%" : "12px", padding: rail ? "0" : "6px 2px 6px 10px",
+            fontFamily: "inherit", overflow: "hidden",
+            borderRadius: rail ? "50%" : "12px", padding: rail ? "0" : "0 10px 0 8px",
+            height: rail ? "36px" : "42px",
             fontSize: "14px", lineHeight: "22px", fontWeight: 400, cursor: "pointer",
           };
           const style = floating
@@ -2986,11 +2991,11 @@ window.__ModuleLoader__.load({
               bottom: Math.round(window.innerHeight - anchor.top + 6) + "px",
               zIndex: 1,
               width: rail ? "36px" : Math.round(anchor.width) + "px",
-              height: rail ? "36px" : "34px",
+              height: rail ? "36px" : "42px",
               whiteSpace: "nowrap",
             }
             : rail || !rowFree
-              ? { ...baseStyle, flex: "0 0 auto", width: rail ? "36px" : "100%", whiteSpace: "nowrap", height: rail ? "36px" : undefined }
+              ? { ...baseStyle, flex: "0 0 auto", width: rail ? "36px" : "100%", whiteSpace: "nowrap" }
               : { ...baseStyle, flex: "1 1 auto", width: "auto", minWidth: 0, whiteSpace: "nowrap" };
           const hoverBg = "var(--dsw-alias-interactive-bg-hover)";
           return jsx("button", {
@@ -3002,7 +3007,26 @@ window.__ModuleLoader__.load({
             onMouseEnter: (e) => { e.currentTarget.style.background = hoverBg; },
             onMouseLeave: (e) => { e.currentTarget.style.background = "transparent"; },
             children: [
-              jsx("span", { style: { flex: "none", fontSize: 16, lineHeight: 1 }, children: "🧰" }),
+              // 单色 SVG 图标（2026-09-16 起，替换原 🧰 emoji）：🧰 是 Unicode 字符没错，
+              // 但被系统 emoji 字体渲染成**彩色字形**，CSS 的 color / currentColor 管不到它；
+              // 只加灰阶滤镜又不跟随主题色（深色下变成中灰，比两边更不齐）。故改为内联 SVG：
+              // 颜色走 currentColor（= --dsw-alias-label-primary），与官方「设置」按钮
+              // (IconSettingsOutline16)、「导入会话」的图标同色、同尺寸、同明暗行为。
+              // 线条风格对齐官方 16px outline 图标集：官方实测线宽 ≈1.06px @16px
+              // ⇒ 本图标 viewBox 24、stroke-width 1.6（16px 下 ≈1.07px、rail 18px 下 ≈1.2px）。
+              // 图形 = 工具箱（箱体 + 提手 + 中缝）；内容范围 x 3–21 / y 3.8–20.3，视觉居中。
+              jsx("svg", {
+                width: rail ? 18 : 16, height: rail ? 18 : 16, viewBox: "0 0 24 24",
+                fill: "none", xmlns: "http://www.w3.org/2000/svg",
+                stroke: "currentColor", strokeWidth: 1.6,
+                strokeLinecap: "round", strokeLinejoin: "round",
+                style: { flex: "none" }, "aria-hidden": true,
+                children: [
+                  jsx("rect", { key: "body", x: 3, y: 8.5, width: 18, height: 11.8, rx: 2.5 }),
+                  jsx("path", { key: "handle", d: "M8.6 8.5V6.2A2.4 2.4 0 0 1 11 3.8h2A2.4 2.4 0 0 1 15.4 6.2v2.3" }),
+                  jsx("path", { key: "seam", d: "M3 14h18" }),
+                ],
+              }),
               !rail && jsx("span", { style: { flex: "0 1 auto", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, children: "工具箱" }),
             ],
           });
