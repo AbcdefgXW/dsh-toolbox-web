@@ -851,7 +851,7 @@ window.__ModuleLoader__.load({
      */
     function ToolboxPanel(props) {
       const [tab, setTab] = React.useState(() => {
-        try { return window.localStorage.getItem("dsh-toolbox-tab") || "sessions"; } catch { return "sessions"; }
+        try { return window.localStorage.getItem("dsh-toolbox-tab") || "presets"; } catch { return "presets"; }
       });
       const [sessions, setSessions] = React.useState([]);
       const [trash, setTrash] = React.useState([]);
@@ -930,7 +930,8 @@ window.__ModuleLoader__.load({
 
       // 当前 tab 被开关隐藏时自动切回可用 tab
       React.useEffect(() => {
-        const avail = ["sessions", "trash", "subagents", "subdirs", "presets", "config", "archived", "search"].filter((t) => {
+        // 顺序与面板 Tab 一致；avail[0] 即"当前 Tab 被隐藏时"的回退目标
+        const avail = ["presets", "config", "subdirs", "sessions", "trash", "subagents", "archived", "search"].filter((t) => {
           if (t === "sessions") return cfg.sessionManage !== false;
           if (t === "subdirs") return cfg.workspaceManage !== false;
           if (t === "search") return cfg.customSearch !== false;

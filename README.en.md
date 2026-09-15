@@ -128,12 +128,13 @@ Restart dsh after editing; check logs with `docker logs deepseek-harness` if it 
 
 After restarting `dsh web`, hard-refresh the browser (Ctrl+Shift+R):
 
-1. **🧰 Toolbox** (bottom-left button; **monochrome icon** in the collapsed rail / on mobile) — 7 tabs:
+1. **🧰 Toolbox** (bottom-left button; **monochrome icon** in the collapsed rail / on mobile) — 8 tabs (Search is hidden by default):
    - **⚙️ Presets**: edit Agent presets online (`~/.agent-presets`)
    - **📄 Config**: edit the dsh config file online (YAML validation + atomic write)
    - **📁 Subdirectories**: create / rename / delete / duplicate dirs under a workspace, batch-assign sessions
    - **💬 Sessions**: sessions grouped by workspace/tag; per row: delete (to trash), duplicate (`-copyN`), move, reset workspace root, tag, view content; empty sessions labeled `(empty session)`
    - **🗑️ Trash**: deleted sessions/subdirectories — restore / purge / preview
+   - **🧬 Subagents**: sub-agent sessions are managed separately (grouped by parent session; view / open / delete to trash) instead of being mixed into the session list
    - **🗄 Archive**: view / restore / delete officially archived sessions
    - **🔍 Search**: full-text search across sessions, highlight + click-to-jump
 2. **Settings → Toolbox**: feature toggles + scheduled heartbeat config
