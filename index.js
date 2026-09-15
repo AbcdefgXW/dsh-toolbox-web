@@ -148,26 +148,54 @@ class ToolsApi extends Service {
       for (const id of ids) archivedIds.add(id);
     } catch {}
     const out = [];
+    // 【性能约束】原实现在一个 handler 里对全部会话同步「算统计 + 解压取最新消息」，
+    // 实测 216 个会话合计约 11.5s，且中途不让出事件循环 → Node 主线程被独占，
+    // 用户此时切到「预设 / 配置文件 / 子目录」等其它 Tab，请求全部排在后面（表现为"什么都要等会话加载完"）。
+    // 现改为两条约束：
+    //   ① 逐条处理时定期让出事件循环（setImmediate），让其它工具调用能插空执行；
+    //   ② 最新消息预览只对「最近活跃 + 体积可控」的前 N 个取，并设总时间预算，超预算即停（其余留空）。
+    const yieldLoop = () => new Promise((r) => setImmediate(r));
+    // 单会话超过该体积不预取预览：解压是同步操作，单个 16MB 会话实测就要 3.3s，无法中断。
+    const LATEST_MAX_BYTES = 4 * 1024 * 1024;
+    const LATEST_LIMIT = 40;
+    const LATEST_BUDGET_MS = 1500;
+    let i = 0;
     for (const s of all) {
       if (archivedIds.has(s.sessionId) || archivedIds.has(s.sessionDir)) continue;
       const stats = sessionStatsReliable(s.path, s.sessionId);
-      // 最新一条消息预览：只解尾部帧（内存可控），不解压全部
-      let latest = null;
-      try {
-        const r = listMessagesTail(s.path, 1);
-        if (r.ok && r.messages && r.messages.length) latest = String(r.messages[r.messages.length - 1].content).slice(0, 80);
-      } catch {}
+      let mtimeMs = 0;
+      try { mtimeMs = fs.statSync(s.path).mtimeMs; } catch {}
       out.push({
         sessionId: s.sessionId,
         cwd: s.cwd,
         title: stats?.title ?? null,
         size: stats?.size ?? 0,
         turns: stats?.turns ?? 0,
-        latest,
+        latest: null, // 由下面的「最近活跃」批次补；未补到的保持 null，前端自动不显示该行
         parentSession: s.header?.parentSession ?? null, // 子代理会话标记（前端分 tab 管理）
         delegationDepth: s.header?.delegationDepth ?? 0,
+        _path: s.path,   // 内部临时字段，返回前删除
+        _mtime: mtimeMs, // 内部临时字段，返回前删除
       });
+      if ((++i & 15) === 0) await yieldLoop();
     }
+
+    // 最新一条消息预览：只解尾部帧（内存可控），不解压全部。
+    const startedAt = Date.now();
+    const targets = out
+      .filter((x) => (x.size || 0) <= LATEST_MAX_BYTES)
+      .sort((a, b) => b._mtime - a._mtime)
+      .slice(0, LATEST_LIMIT);
+    let j = 0;
+    for (const it of targets) {
+      if (Date.now() - startedAt > LATEST_BUDGET_MS) break;
+      try {
+        const r = listMessagesTail(it._path, 1);
+        if (r.ok && r.messages && r.messages.length) it.latest = String(r.messages[r.messages.length - 1].content).slice(0, 80);
+      } catch {}
+      if ((++j & 4) === 0) await yieldLoop();
+    }
+    for (const it of out) { delete it._path; delete it._mtime; }
     return out;
   }
 
@@ -337,7 +365,11 @@ class ToolsApi extends Service {
 
   // ── 子目录管理 ──
   async "workspace.list"() {
-    return refreshSessionCounts(listSubdirs());
+    // 【性能】原先会 refreshSessionCounts() → listAllSessions()，即"只打开子目录 tab 也要扫全部会话"。
+    // 但子目录 tab 只需要目录信息：会话数由前端用**已加载的 sessions 数组**现算
+    // （client.js 的 sessionsIn(d).length，同一个 row() 里本来就有这个变量）。
+    // 因此这里不再触发全量扫描，workspace.list 变成纯文件系统操作（毫秒级）。
+    return listSubdirs();
   }
 
   async "workspace.create"(name) {

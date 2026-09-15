@@ -1595,12 +1595,28 @@ window.__ModuleLoader__.load({
       const [presets, setPresets] = React.useState([]);
       const [editing, setEditing] = React.useState(null); // {presetId, fileName, content, title}
       const [loading, setLoading] = React.useState(false);
+      const [err, setErr] = React.useState("");
 
       const refresh = React.useCallback(() => {
         setLoading(true);
+        setErr("");
         tools["presets.list"]()
-          .then((resp) => setPresets(unwrap(resp) || []))
-          .catch((e) => console.error("dsh-toolbox: presets.list 失败", e))
+          .then((resp) => {
+            const r = unwrap(resp);
+            // 【防御】后端异常时会返回 {ok:false,error} 之类的**对象**，而 unwrap 的兜底 `|| []` 对
+            // truthy 对象无效 → presets 变成非数组 → 下面 presets.map 抛错并拖垮整个工具箱面板。
+            // 这里做类型校验，非数组一律退化为空列表 + 显示错误原因。
+            if (Array.isArray(r)) { setPresets(r); return; }
+            setPresets([]);
+            const detail = (r && (r.error || r.message)) || JSON.stringify(resp);
+            setErr("加载预设失败：" + detail);
+            console.error("dsh-toolbox: presets.list 返回非数组", resp);
+          })
+          .catch((e) => {
+            setPresets([]);
+            setErr("加载预设失败：" + (e && e.message ? e.message : String(e)));
+            console.error("dsh-toolbox: presets.list 失败", e);
+          })
           .finally(() => setLoading(false));
       }, [tools, unwrap]);
 
@@ -1649,11 +1665,13 @@ window.__ModuleLoader__.load({
             jsx("div", { style: { flex: 1, fontSize: 12, opacity: 0.7 }, children: "编辑 Agent 预设文件（~/.agent-presets），保存即时生效，新会话生效" }),
             jsx(P.Button, { size: "sm", onClick: refresh, children: "刷新" }),
           ] }),
-          loading && presets.length === 0
-            ? jsx("div", { style: { opacity: 0.6, padding: 12 }, children: "加载中…" })
-            : presets.length === 0
-              ? jsx("div", { style: { opacity: 0.5, padding: 8, fontSize: 13 }, children: "没有自定义预设" })
-              : presets.map(row),
+          err
+            ? jsx("div", { style: { color: "#e5484d", padding: 8, fontSize: 13, whiteSpace: "pre-wrap" }, children: err })
+            : loading && presets.length === 0
+              ? jsx("div", { style: { opacity: 0.6, padding: 12 }, children: "加载中…" })
+              : presets.length === 0
+                ? jsx("div", { style: { opacity: 0.5, padding: 8, fontSize: 13 }, children: "没有自定义预设" })
+                : presets.map(row),
           editing ? jsx(CodeEditor, {
             key: editing.presetId + ":" + editing.fileName,
             title: editing.title,
@@ -2063,7 +2081,7 @@ window.__ModuleLoader__.load({
                 onClick: () => setExpanded({ ...expanded, [d.name]: !isOpen }),
                 children: [
                   jsx("div", { style: { fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", title: d.name }, children: (isOpen ? "▾ " : "▸ ") + d.name }),
-                  jsx("div", { style: { fontSize: 11, opacity: 0.55 }, children: d.sessionCount + " 个会话 · 点击展开" }),
+                  jsx("div", { style: { fontSize: 11, opacity: 0.55 }, children: inside.length + " 个会话 · 点击展开" }),
                 ],
               }),
               jsx(P.Button, {
